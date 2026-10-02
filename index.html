@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Adewa - Security Check</title>
+
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+
+            min-height: 100vh;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #07111f,
+                    #0d1b2e
+                );
+
+            color: white;
+
+            font-family:
+                Arial,
+                sans-serif;
+
+            display: flex;
+
+            justify-content: center;
+
+            align-items: center;
+
+            padding: 20px;
+        }
+
+        .container {
+
+            width: 100%;
+
+            max-width: 420px;
+
+            background:
+                rgba(255,255,255,0.06);
+
+            border:
+                1px solid
+                rgba(255,255,255,0.1);
+
+            border-radius: 24px;
+
+            padding: 35px 25px;
+
+            text-align: center;
+
+            backdrop-filter: blur(15px);
+
+            box-shadow:
+                0 20px 50px
+                rgba(0,0,0,0.3);
+        }
+
+        .logo {
+
+            width: 90px;
+
+            height: 90px;
+
+            border-radius: 50%;
+
+            object-fit: cover;
+
+            margin-bottom: 20px;
+        }
+
+        h1 {
+
+            font-size: 27px;
+
+            margin-bottom: 10px;
+        }
+
+        p {
+
+            color: #b8c4d4;
+
+            line-height: 1.6;
+
+            margin-bottom: 25px;
+        }
+
+        .loader {
+
+            width: 45px;
+
+            height: 45px;
+
+            border: 4px solid
+                rgba(255,255,255,0.2);
+
+            border-top-color:
+                #ffffff;
+
+            border-radius: 50%;
+
+            animation:
+                spin 1s linear infinite;
+
+            margin:
+                25px auto;
+        }
+
+        @keyframes spin {
+
+            to {
+                transform:
+                    rotate(360deg);
+            }
+        }
+
+        .status {
+
+            padding: 15px;
+
+            border-radius: 14px;
+
+            margin-top: 20px;
+
+            display: none;
+
+            line-height: 1.5;
+        }
+
+        .success {
+
+            background:
+                rgba(0,180,100,0.15);
+
+            border:
+                1px solid
+                rgba(0,180,100,0.35);
+
+            color:
+                #75ffc1;
+        }
+
+        .danger {
+
+            background:
+                rgba(255,50,50,0.15);
+
+            border:
+                1px solid
+                rgba(255,50,50,0.35);
+
+            color:
+                #ff8c8c;
+        }
+
+        .warning {
+
+            background:
+                rgba(255,180,0,0.15);
+
+            border:
+                1px solid
+                rgba(255,180,0,0.35);
+
+            color:
+                #ffd76a;
+        }
+
+        .error {
+
+            background:
+                rgba(255,255,255,0.08);
+
+            color:
+                #ffffff;
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+    <div class="container">
+
+        <img
+            class="logo"
+            src="logo.png"
+            alt="Adewa"
+        >
+
+        <h1>
+            Adewa Verification
+        </h1>
+
+        <p id="description">
+            Checking your Telegram account
+            securely...
+        </p>
+
+        <div
+            id="loader"
+            class="loader"
+        ></div>
+
+        <div
+            id="success"
+            class="status success"
+        ></div>
+
+        <div
+            id="danger"
+            class="status danger"
+        ></div>
+
+        <div
+            id="warning"
+            class="status warning"
+        ></div>
+
+        <div
+            id="error"
+            class="status error"
+        ></div>
+
+    </div>
+
+
+<script>
+
+    const tg =
+        window.Telegram.WebApp;
+
+    tg.ready();
+
+    tg.expand();
+
+
+    // =================================================
+    // BACKEND
+    // =================================================
+
+    const API_BASE =
+        "https://adewa.vercel.app";
+
+
+    // =================================================
+    // DEVICE ID
+    // =================================================
+
+    function getDeviceId() {
+
+        let deviceId =
+            localStorage.getItem(
+                "device_installation_id"
+            );
+
+        if (!deviceId) {
+
+            deviceId =
+                crypto.randomUUID();
+
+            localStorage.setItem(
+                "device_installation_id",
+                deviceId
+            );
+        }
+
+        return deviceId;
+    }
+
+
+    // =================================================
+    // UI
+    // =================================================
+
+    function hideAll() {
+
+        document
+            .getElementById("success")
+            .style.display = "none";
+
+        document
+            .getElementById("danger")
+            .style.display = "none";
+
+        document
+            .getElementById("warning")
+            .style.display = "none";
+
+        document
+            .getElementById("error")
+            .style.display = "none";
+    }
+
+
+    function show(
+        type,
+        message
+    ) {
+
+        hideAll();
+
+        document
+            .getElementById("loader")
+            .style.display = "none";
+
+        document
+            .getElementById("description")
+            .style.display = "none";
+
+        const element =
+            document.getElementById(type);
+
+        element.innerHTML =
+            message;
+
+        element.style.display =
+            "block";
+    }
+
+
+    // =================================================
+    // AUTHENTICATION
+    // =================================================
+
+    async function verify() {
+
+        try {
+
+            const initData =
+                tg.initData;
+
+            if (!initData) {
+
+                show(
+                    "error",
+                    "<b>Telegram data missing.</b><br><br>" +
+                    "Please open this page from the Telegram bot."
+                );
+
+                return;
+            }
+
+
+            const deviceId =
+                getDeviceId();
+
+
+            const response =
+                await fetch(
+                    `${API_BASE}/api/auth`,
+                    {
+                        method: "POST",
+
+                        headers: {
+
+                            "Content-Type":
+                                "application/json",
+
+                            "x-init-data":
+                                initData,
+
+                            "x-device":
+                                deviceId
+                        }
+                    }
+                );
+
+
+            const data =
+                await response.json();
+
+
+            // =========================================
+            // VERIFIED
+            // =========================================
+
+            if (
+                data.ok === true &&
+                data.status === "verified"
+            ) {
+
+                show(
+                    "success",
+
+                    "<b>✓ Verification Successful</b><br><br>" +
+
+                    "Your account has been verified successfully." +
+
+                    "<br><br>" +
+
+                    "Return to Telegram and press " +
+                    "<b>Continue</b>."
+                );
+
+                return;
+            }
+
+
+            // =========================================
+            // BANNED
+            // =========================================
+
+            if (
+                data.status === "banned"
+            ) {
+
+                show(
+                    "danger",
+
+                    "<b>Verification Failed</b><br><br>" +
+
+                    (data.message ||
+                        "Your account has been blocked.")
+                );
+
+                return;
+            }
+
+
+            // =========================================
+            // ERROR
+            // =========================================
+
+            show(
+                "error",
+
+                "<b>Verification Error</b><br><br>" +
+
+                (
+                    data.message ||
+                    "Something went wrong."
+                )
+            );
+
+        }
+
+        catch (error) {
+
+            console.error(error);
+
+            show(
+                "error",
+
+                "<b>Connection Error</b><br><br>" +
+
+                "Could not connect to the verification server."
+            );
+        }
+    }
+
+
+    // =================================================
+    // START
+    // =================================================
+
+    verify();
+
+</script>
+
+</body>
+
+</html>
