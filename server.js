@@ -29,6 +29,7 @@ app.use((req, res, next) => {
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const DATABASE_URL = process.env.DATABASE_URL;
 const BOT_USERNAME = process.env.BOT_USERNAME;
+const ADMIN_ID = process.env.ADMIN_ID;
 const MINI_APP_URL =
     process.env.MINI_APP_URL ||
     "https://abdulselamahemade608-prog.github.io/Telebot/";
@@ -36,6 +37,7 @@ const MINI_APP_URL =
 if (!BOT_TOKEN) console.warn("WARNING: BOT_TOKEN is missing.");
 if (!DATABASE_URL) console.warn("WARNING: DATABASE_URL is missing.");
 if (!BOT_USERNAME) console.warn("WARNING: BOT_USERNAME is missing.");
+if (!ADMIN_ID) console.warn("WARNING: ADMIN_ID is missing.");
 
 // =====================================================
 // DATABASE
@@ -494,6 +496,107 @@ app.post("/api/auth", async (req, res) => {
 });
 
 // =====================================================
+// ADMIN: /ban and /unban (Telegram webhook)
+// =====================================================
+
+app.post("/api/webhook", async (req, res) => {
+    try {
+        const message = req.body && req.body.message;
+
+        // Telegram always needs a quick 200 reply
+        if (!message || !message.text || !message.from) {
+            return res.json({ ok: true });
+        }
+
+        // Only the admin can use these commands
+        if (!ADMIN_ID || String(message.from.id) !== String(ADMIN_ID)) {
+            return res.json({ ok: true });
+        }
+
+        const parts = message.text.trim().split(/\s+/);
+        const command = parts[0].split("@")[0].toLowerCase();
+
+        if (command !== "/ban" && command !== "/unban") {
+            return res.json({ ok: true });
+        }
+
+        const chatId = message.chat.id;
+        const targetId = parts[1];
+
+        if (!targetId || !/^\d+$/.test(targetId)) {
+            await sendTelegramMessage(
+                chatId,
+                `⚠️ Usage:\n<code>/ban USER_ID [reason]</code>\n<code>/unban USER_ID</code>`
+            );
+            return res.json({ ok: true });
+        }
+
+        if (!pool) {
+            await sendTelegramMessage(chatId, "❌ Database is not configured.");
+            return res.json({ ok: true });
+        }
+
+        await initDatabase();
+
+        if (command === "/ban") {
+            const reason = parts.slice(2).join(" ") || "Banned by admin.";
+
+            await pool.query(
+                `
+                INSERT INTO fraud_users (telegram_id, status, ban_reason, risk_score, ban_message_sent)
+                VALUES ($1, 'banned', $2, 100, true)
+                ON CONFLICT (telegram_id)
+                DO UPDATE SET
+                    status = 'banned',
+                    ban_reason = EXCLUDED.ban_reason,
+                    risk_score = 100,
+                    ban_message_sent = true,
+                    last_seen = NOW()
+                `,
+                [targetId, reason]
+            );
+
+            await sendTelegramMessage(
+                chatId,
+                `🚫 User <code>${targetId}</code> has been banned.\nReason: ${reason}`
+            );
+        } else {
+            const result = await pool.query(
+                `
+                UPDATE fraud_users
+                SET status = 'verified',
+                    ban_reason = NULL,
+                    vpn_detected = false,
+                    proxy_detected = false,
+                    risk_score = 0,
+                    ban_message_sent = false,
+                    last_seen = NOW()
+                WHERE telegram_id = $1
+                `,
+                [targetId]
+            );
+
+            if (result.rowCount === 0) {
+                await sendTelegramMessage(
+                    chatId,
+                    `⚠️ User <code>${targetId}</code> was not found in the database.`
+                );
+            } else {
+                await sendTelegramMessage(
+                    chatId,
+                    `✅ User <code>${targetId}</code> has been unbanned.`
+                );
+            }
+        }
+
+        return res.json({ ok: true });
+    } catch (error) {
+        console.error("WEBHOOK ERROR:", error);
+        return res.json({ ok: true });
+    }
+});
+
+// =====================================================
 // 404
 // =====================================================
 
@@ -513,4 +616,4 @@ if (require.main === module) {
     app.listen(port, () => {
         console.log(`Backend running on port ${port}`);
     });
-}
+        }
