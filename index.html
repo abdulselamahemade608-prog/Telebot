@@ -1,481 +1,253 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-
-    <meta charset="UTF-8">
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
-
-    <title>Adewa - Security Check</title>
-
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
-    <style>
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-
-            min-height: 100vh;
-
-            background:
-                linear-gradient(
-                    135deg,
-                    #07111f,
-                    #0d1b2e
-                );
-
-            color: white;
-
-            font-family:
-                Arial,
-                sans-serif;
-
-            display: flex;
-
-            justify-content: center;
-
-            align-items: center;
-
-            padding: 20px;
-        }
-
-        .container {
-
-            width: 100%;
-
-            max-width: 420px;
-
-            background:
-                rgba(255,255,255,0.06);
-
-            border:
-                1px solid
-                rgba(255,255,255,0.1);
-
-            border-radius: 24px;
-
-            padding: 35px 25px;
-
-            text-align: center;
-
-            backdrop-filter: blur(15px);
-
-            box-shadow:
-                0 20px 50px
-                rgba(0,0,0,0.3);
-        }
-
-        .logo {
-
-            width: 90px;
-
-            height: 90px;
-
-            border-radius: 50%;
-
-            object-fit: cover;
-
-            margin-bottom: 20px;
-        }
-
-        h1 {
-
-            font-size: 27px;
-
-            margin-bottom: 10px;
-        }
-
-        p {
-
-            color: #b8c4d4;
-
-            line-height: 1.6;
-
-            margin-bottom: 25px;
-        }
-
-        .loader {
-
-            width: 45px;
-
-            height: 45px;
-
-            border: 4px solid
-                rgba(255,255,255,0.2);
-
-            border-top-color:
-                #ffffff;
-
-            border-radius: 50%;
-
-            animation:
-                spin 1s linear infinite;
-
-            margin:
-                25px auto;
-        }
-
-        @keyframes spin {
-
-            to {
-                transform:
-                    rotate(360deg);
-            }
-        }
-
-        .status {
-
-            padding: 15px;
-
-            border-radius: 14px;
-
-            margin-top: 20px;
-
-            display: none;
-
-            line-height: 1.5;
-        }
-
-        .success {
-
-            background:
-                rgba(0,180,100,0.15);
-
-            border:
-                1px solid
-                rgba(0,180,100,0.35);
-
-            color:
-                #75ffc1;
-        }
-
-        .danger {
-
-            background:
-                rgba(255,50,50,0.15);
-
-            border:
-                1px solid
-                rgba(255,50,50,0.35);
-
-            color:
-                #ff8c8c;
-        }
-
-        .warning {
-
-            background:
-                rgba(255,180,0,0.15);
-
-            border:
-                1px solid
-                rgba(255,180,0,0.35);
-
-            color:
-                #ffd76a;
-        }
-
-        .error {
-
-            background:
-                rgba(255,255,255,0.08);
-
-            color:
-                #ffffff;
-        }
-
-    </style>
-
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Adewa</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+
+  :root{
+    --bg1:#070b1a; --bg2:#0e1633;
+    --card:rgba(255,255,255,.06); --line:rgba(255,255,255,.12);
+    --muted:#a9b4cc;
+    --c-load:linear-gradient(135deg,#6a8bff,#9b5cff);
+    --c-ok:linear-gradient(135deg,#19e68c,#00b4a6);
+    --c-bad:linear-gradient(135deg,#ff5d7a,#ff2e63);
+    --c-warn:linear-gradient(135deg,#ffc83d,#ff8a1f);
+    --c-err:linear-gradient(135deg,#7f8cff,#5a67e8);
+    --glow:#7b6bff;
+  }
+
+  body{
+    min-height:100vh; min-height:100dvh;
+    display:flex; align-items:center; justify-content:center;
+    padding:20px; color:#fff;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans Ethiopic",Arial,sans-serif;
+    background:
+      radial-gradient(520px 320px at 12% 8%,rgba(106,139,255,.28),transparent 60%),
+      radial-gradient(480px 320px at 92% 92%,rgba(255,92,170,.22),transparent 60%),
+      radial-gradient(380px 260px at 90% 10%,rgba(25,230,140,.14),transparent 60%),
+      linear-gradient(160deg,var(--bg1),var(--bg2));
+    overflow:hidden;
+  }
+
+  .card{
+    width:100%; max-width:400px; text-align:center;
+    padding:34px 24px 26px;
+    background:var(--card); border:1px solid var(--line); border-radius:28px;
+    backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
+    box-shadow:0 24px 60px rgba(0,0,0,.4);
+  }
+
+  .brand{
+    width:34px; height:34px; border-radius:50%; object-fit:cover;
+    margin:0 auto 22px; display:block; box-shadow:0 0 0 2px rgba(255,255,255,.14);
+  }
+
+  .badge{
+    position:relative; width:104px; height:104px; margin:0 auto 24px;
+    display:grid; place-items:center; border-radius:50%;
+    background:var(--c-load);
+    box-shadow:0 14px 40px color-mix(in srgb,var(--glow) 55%,transparent);
+    transition:background .35s, box-shadow .35s;
+  }
+  .badge svg{width:50px;height:50px;display:none}
+  .badge[data-state="loading"] .i-shield,
+  .badge[data-state="success"] .i-check,
+  .badge[data-state="banned"]  .i-ban,
+  .badge[data-state="warning"] .i-warn,
+  .badge[data-state="error"]   .i-err{display:block;animation:pop .45s cubic-bezier(.2,1.4,.4,1)}
+
+  .badge[data-state="loading"]{background:var(--c-load);--glow:#7b6bff}
+  .badge[data-state="success"]{background:var(--c-ok);--glow:#19e68c}
+  .badge[data-state="banned"] {background:var(--c-bad);--glow:#ff3d68}
+  .badge[data-state="warning"]{background:var(--c-warn);--glow:#ffa726}
+  .badge[data-state="error"]  {background:var(--c-err);--glow:#6f7cff}
+
+  .ring{
+    position:absolute; inset:-9px; border-radius:50%;
+    border:3px solid transparent; border-top-color:#fff; border-right-color:rgba(255,255,255,.35);
+    animation:spin 1.1s linear infinite; display:none;
+  }
+  .badge[data-state="loading"] .ring{display:block}
+
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes pop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+
+  h1{font-size:24px;font-weight:700;letter-spacing:-.2px;margin-bottom:8px}
+  .msg{color:var(--muted);font-size:15px;line-height:1.6;min-height:48px}
+
+  .btn{
+    display:none; width:100%; margin-top:22px; padding:14px 18px;
+    border:0; border-radius:16px; color:#fff; font-size:16px; font-weight:600;
+    cursor:pointer; transition:transform .12s, filter .12s;
+  }
+  .btn:active{transform:scale(.97);filter:brightness(.92)}
+  .btn:focus-visible{outline:3px solid #fff;outline-offset:3px}
+  .btn.ok{background:var(--c-ok);box-shadow:0 10px 26px rgba(25,230,140,.3)}
+  .btn.retry{background:var(--c-err);box-shadow:0 10px 26px rgba(111,124,255,.3)}
+
+  .chips{display:flex;justify-content:center;gap:10px;margin-top:26px}
+  .chip{
+    flex:1; padding:12px 6px 10px; border-radius:16px;
+    background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08);
+    font-size:12px; color:var(--muted);
+  }
+  .chip span{
+    width:34px; height:34px; border-radius:11px; margin:0 auto 7px;
+    display:grid; place-items:center;
+  }
+  .chip svg{width:19px;height:19px}
+  .chip:nth-child(1) span{background:linear-gradient(135deg,#19e68c,#00b4a6)}
+  .chip:nth-child(2) span{background:linear-gradient(135deg,#ffd23d,#ff9f1f)}
+  .chip:nth-child(3) span{background:linear-gradient(135deg,#b06bff,#6a8bff)}
+
+  @media (prefers-reduced-motion:reduce){
+    .ring{animation-duration:2.4s}
+    .badge svg{animation:none!important}
+  }
+</style>
 </head>
 
-
 <body>
+<main class="card">
 
-    <div class="container">
+  <img class="brand" src="logo.png" alt="" onerror="this.style.display='none'">
 
-        <img
-            class="logo"
-            src="logo.png"
-            alt="Adewa"
-        >
+  <div class="badge" id="badge" data-state="loading" aria-live="polite">
+    <div class="ring"></div>
 
-        <h1>
-            Adewa Verification
-        </h1>
+    <svg class="i-shield" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3l7 3v5c0 4.6-3 8.3-7 10-4-1.7-7-5.4-7-10V6l7-3z"/>
+      <path d="M9 12l2 2 4-4"/>
+    </svg>
+    <svg class="i-check" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 12.5l4.5 4.5L19 7.5"/>
+    </svg>
+    <svg class="i-ban" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round">
+      <circle cx="12" cy="12" r="9"/><path d="M5.7 5.7l12.6 12.6"/>
+    </svg>
+    <svg class="i-warn" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3.5l9.5 16.5h-19L12 3.5z"/><path d="M12 10v4.5"/><circle cx="12" cy="17.2" r=".6" fill="#fff"/>
+    </svg>
+    <svg class="i-err" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 6l12 12M18 6L6 18"/>
+    </svg>
+  </div>
 
-        <p id="description">
-            Checking your Telegram account
-            securely...
-        </p>
+  <h1 id="title">Checking your account</h1>
+  <p class="msg" id="message">Please wait a moment while we securely verify you on Telegram.</p>
 
-        <div
-            id="loader"
-            class="loader"
-        ></div>
+  <button class="btn ok" id="doneBtn" type="button">Continue in Telegram</button>
+  <button class="btn retry" id="retryBtn" type="button">Try again</button>
 
-        <div
-            id="success"
-            class="status success"
-        ></div>
-
-        <div
-            id="danger"
-            class="status danger"
-        ></div>
-
-        <div
-            id="warning"
-            class="status warning"
-        ></div>
-
-        <div
-            id="error"
-            class="status error"
-        ></div>
-
+  <div class="chips" aria-hidden="true">
+    <div class="chip">
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.6-3 8.3-7 10-4-1.7-7-5.4-7-10V6l7-3z"/></svg></span>
+      Secure
     </div>
+    <div class="chip">
+      <span><svg viewBox="0 0 24 24" fill="#fff"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"/></svg></span>
+      Fast
+    </div>
+    <div class="chip">
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2.5"/><path d="M8 11V8a4 4 0 018 0v3"/></svg></span>
+      Private
+    </div>
+  </div>
 
+</main>
 
 <script>
+  const tg = (window.Telegram && window.Telegram.WebApp) || {
+    initData: "", ready() {}, expand() {}, close() { window.close(); }
+  };
+  try { tg.ready(); tg.expand(); } catch (e) {}
 
-    const tg =
-        window.Telegram.WebApp;
+  // BACKEND
+  const API_BASE = "https://adewa.vercel.app";
 
-    tg.ready();
+  // DEVICE ID
+  function getDeviceId() {
+    let deviceId = null;
+    try { deviceId = localStorage.getItem("device_installation_id"); } catch (e) {}
 
-    tg.expand();
+    if (!deviceId) {
+      deviceId = (crypto.randomUUID && crypto.randomUUID()) ||
+                 String(Date.now()) + Math.random().toString(16).slice(2);
+      try { localStorage.setItem("device_installation_id", deviceId); } catch (e) {}
+    }
+    return deviceId;
+  }
 
+  // UI
+  const $ = (id) => document.getElementById(id);
 
-    // =================================================
-    // BACKEND
-    // =================================================
-    const API_BASE = 'https://mrabdubot.vercel.app';
+  function setState(state, title, message) {
+    $("badge").dataset.state = state;
+    $("title").textContent = title;
+    $("message").textContent = message;
+    $("doneBtn").style.display  = state === "success" ? "block" : "none";
+    $("retryBtn").style.display = (state === "error" || state === "warning") ? "block" : "none";
+  }
 
+  function loading() {
+    setState("loading", "Checking your account",
+      "Please wait a moment while we securely verify you on Telegram.");
+  }
 
-    // =================================================
-    // DEVICE ID
-    // =================================================
+  // AUTHENTICATION
+  async function verify() {
+    loading();
 
-    function getDeviceId() {
+    try {
+      const initData = tg.initData;
 
-        let deviceId =
-            localStorage.getItem(
-                "device_installation_id"
-            );
+      if (!initData) {
+        setState("warning", "Open from Telegram",
+          "Telegram data is missing. Please open this page from the Telegram bot.");
+        return;
+      }
 
-        if (!deviceId) {
-
-            deviceId =
-                crypto.randomUUID();
-
-            localStorage.setItem(
-                "device_installation_id",
-                deviceId
-            );
+      const response = await fetch(`${API_BASE}/api/auth`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-init-data": initData,
+          "x-device": getDeviceId()
         }
+      });
 
-        return deviceId;
+      const data = await response.json();
+
+      if (data.ok === true && data.status === "verified") {
+        setState("success", "You're verified",
+          "Return to Telegram and press Continue.");
+        return;
+      }
+
+      if (data.status === "banned") {
+        setState("banned", "Access blocked",
+          data.message || "Your account has been blocked.");
+        return;
+      }
+
+      setState("error", "Verification failed",
+        data.message || "Something went wrong. Please try again.");
+
+    } catch (error) {
+      console.error(error);
+      setState("error", "No connection",
+        "Could not reach the verification server. Check your internet and try again.");
     }
+  }
 
+  $("retryBtn").addEventListener("click", verify);
+  $("doneBtn").addEventListener("click", () => tg.close());
 
-    // =================================================
-    // UI
-    // =================================================
-
-    function hideAll() {
-
-        document
-            .getElementById("success")
-            .style.display = "none";
-
-        document
-            .getElementById("danger")
-            .style.display = "none";
-
-        document
-            .getElementById("warning")
-            .style.display = "none";
-
-        document
-            .getElementById("error")
-            .style.display = "none";
-    }
-
-
-    function show(
-        type,
-        message
-    ) {
-
-        hideAll();
-
-        document
-            .getElementById("loader")
-            .style.display = "none";
-
-        document
-            .getElementById("description")
-            .style.display = "none";
-
-        const element =
-            document.getElementById(type);
-
-        element.innerHTML =
-            message;
-
-        element.style.display =
-            "block";
-    }
-
-
-    // =================================================
-    // AUTHENTICATION
-    // =================================================
-
-    async function verify() {
-
-        try {
-
-            const initData =
-                tg.initData;
-
-            if (!initData) {
-
-                show(
-                    "error",
-                    "<b>Telegram data missing.</b><br><br>" +
-                    "Please open this page from the Telegram bot."
-                );
-
-                return;
-            }
-
-
-            const deviceId =
-                getDeviceId();
-
-
-            const response =
-                await fetch(
-                    `${API_BASE}/api/auth`,
-                    {
-                        method: "POST",
-
-                        headers: {
-
-                            "Content-Type":
-                                "application/json",
-
-                            "x-init-data":
-                                initData,
-
-                            "x-device":
-                                deviceId
-                        }
-                    }
-                );
-
-
-            const data =
-                await response.json();
-
-
-            // =========================================
-            // VERIFIED
-            // =========================================
-
-            if (
-                data.ok === true &&
-                data.status === "verified"
-            ) {
-
-                show(
-                    "success",
-
-                    "<b>✓ Verification Successful</b><br><br>" +
-
-                    "Your account has been verified successfully." +
-
-                    "<br><br>" +
-
-                    "Return to Telegram and press " +
-                    "<b>Continue</b>."
-                );
-
-                return;
-            }
-
-
-            // =========================================
-            // BANNED
-            // =========================================
-
-            if (
-                data.status === "banned"
-            ) {
-
-                show(
-                    "danger",
-
-                    "<b>Verification Failed</b><br><br>" +
-
-                    (data.message ||
-                        "Your account has been blocked.")
-                );
-
-                return;
-            }
-
-
-            // =========================================
-            // ERROR
-            // =========================================
-
-            show(
-                "error",
-
-                "<b>Verification Error</b><br><br>" +
-
-                (
-                    data.message ||
-                    "Something went wrong."
-                )
-            );
-
-        }
-
-        catch (error) {
-
-            console.error(error);
-
-            show(
-                "error",
-
-                "<b>Connection Error</b><br><br>" +
-
-                "Could not connect to the verification server."
-            );
-        }
-    }
-
-
-    // =================================================
-    // START
-    // =================================================
-
-    verify();
-
+  verify();
 </script>
-
 </body>
-
 </html>
