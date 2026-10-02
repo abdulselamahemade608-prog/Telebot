@@ -3,18 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Adewa</title>
+<title>Account check</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
-  --bg1:#060a18;--bg2:#101a3a;--muted:#aab5d0;
-  --g-load:linear-gradient(135deg,#5b8cff,#a35cff);
-  --g-ok:linear-gradient(135deg,#22f0a0,#00b8d4);
-  --g-bad:linear-gradient(135deg,#ff6b6b,#ff2d78);
-  --g-warn:linear-gradient(135deg,#ffd43b,#ff8a1f);
-  --g-err:linear-gradient(135deg,#8b7bff,#4f6bff);
-  --glow:#7b6bff;
+  --bg1:#070b1c;--bg2:#121d42;--muted:#b4bfd9;
+  --g-load:linear-gradient(135deg,#4facfe,#8e5bff 55%,#ff5fd2);
+  --g-ok:linear-gradient(135deg,#00e5a0,#00c2ff);
+  --g-bad:linear-gradient(135deg,#ff5f6d,#ff2d87);
+  --g-warn:linear-gradient(135deg,#ffe259,#ff8a1f);
+  --g-err:linear-gradient(135deg,#8e7bff,#3d6bff);
+  --glow:#8e5bff;
 }
 html,body{height:100%}
 body{
@@ -23,32 +23,33 @@ body{
   color:#fff;overflow:hidden;
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans Ethiopic",Arial,sans-serif;
   background:
-    radial-gradient(540px 340px at 10% 6%,rgba(91,140,255,.32),transparent 60%),
-    radial-gradient(500px 340px at 95% 95%,rgba(255,80,170,.24),transparent 60%),
-    radial-gradient(400px 280px at 92% 8%,rgba(34,240,160,.16),transparent 60%),
+    radial-gradient(520px 340px at 8% 6%,rgba(79,172,254,.34),transparent 60%),
+    radial-gradient(520px 360px at 96% 96%,rgba(255,95,210,.26),transparent 60%),
+    radial-gradient(420px 300px at 94% 6%,rgba(0,229,160,.18),transparent 60%),
+    radial-gradient(380px 280px at 4% 96%,rgba(255,200,60,.12),transparent 60%),
     linear-gradient(160deg,var(--bg1),var(--bg2));
 }
 .card{
   width:100%;max-width:400px;text-align:center;padding:38px 24px 26px;
-  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.13);border-radius:30px;
-  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
-  box-shadow:0 28px 70px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.12);
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);border-radius:30px;
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  box-shadow:0 28px 70px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.14);
 }
 .badge{
-  position:relative;width:112px;height:112px;margin:0 auto 26px;border-radius:50%;
+  position:relative;width:116px;height:116px;margin:0 auto 26px;border-radius:50%;
   display:grid;place-items:center;background:var(--g-load);
-  box-shadow:0 16px 46px color-mix(in srgb,var(--glow) 60%,transparent),inset 0 2px 0 rgba(255,255,255,.35);
+  box-shadow:0 16px 46px color-mix(in srgb,var(--glow) 62%,transparent),inset 0 2px 0 rgba(255,255,255,.4);
   transition:background .35s,box-shadow .35s;
 }
-.badge svg{width:56px;height:56px;display:none;filter:drop-shadow(0 2px 4px rgba(0,0,0,.25))}
+.badge svg{width:60px;height:60px;display:none;filter:drop-shadow(0 3px 5px rgba(0,0,0,.28))}
 .badge[data-state=loading] .i-load,
 .badge[data-state=success] .i-ok,
 .badge[data-state=banned] .i-ban,
 .badge[data-state=warning] .i-warn,
 .badge[data-state=error] .i-err{display:block;animation:pop .5s cubic-bezier(.2,1.4,.4,1)}
-.badge[data-state=loading]{background:var(--g-load);--glow:#7b6bff}
-.badge[data-state=success]{background:var(--g-ok);--glow:#22f0a0}
-.badge[data-state=banned]{background:var(--g-bad);--glow:#ff3d70}
+.badge[data-state=loading]{background:var(--g-load);--glow:#8e5bff}
+.badge[data-state=success]{background:var(--g-ok);--glow:#00e5a0}
+.badge[data-state=banned]{background:var(--g-bad);--glow:#ff3d78}
 .badge[data-state=warning]{background:var(--g-warn);--glow:#ffa726}
 .badge[data-state=error]{background:var(--g-err);--glow:#6f7cff}
 .ring{
@@ -71,8 +72,8 @@ h1{font-size:25px;font-weight:750;letter-spacing:-.3px;margin-bottom:10px}
 .btn svg{width:20px;height:20px}
 .btn:active{transform:scale(.97);filter:brightness(.92)}
 .btn:focus-visible{outline:3px solid #fff;outline-offset:3px}
-.btn.ok{background:var(--g-ok);box-shadow:0 10px 28px rgba(34,240,160,.32)}
-.btn.retry{background:var(--g-err);box-shadow:0 10px 28px rgba(111,124,255,.34)}
+.btn.ok{background:var(--g-ok);box-shadow:0 10px 28px rgba(0,229,160,.34)}
+.btn.retry{background:var(--g-err);box-shadow:0 10px 28px rgba(111,124,255,.36)}
 
 .chips{display:flex;gap:10px;margin-top:28px}
 .chip{
@@ -80,13 +81,13 @@ h1{font-size:25px;font-weight:750;letter-spacing:-.3px;margin-bottom:10px}
   background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);
 }
 .chip span{
-  width:38px;height:38px;border-radius:13px;margin:0 auto 8px;display:grid;place-items:center;
-  box-shadow:0 6px 16px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.35);
+  width:40px;height:40px;border-radius:14px;margin:0 auto 8px;display:grid;place-items:center;
+  box-shadow:0 6px 16px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.4);
 }
-.chip svg{width:21px;height:21px}
-.chip:nth-child(1) span{background:linear-gradient(135deg,#22f0a0,#00b8d4)}
-.chip:nth-child(2) span{background:linear-gradient(135deg,#ffd43b,#ff8a1f)}
-.chip:nth-child(3) span{background:linear-gradient(135deg,#c06bff,#5b8cff)}
+.chip svg{width:22px;height:22px}
+.chip:nth-child(1) span{background:linear-gradient(135deg,#00e5a0,#00c2ff)}
+.chip:nth-child(2) span{background:linear-gradient(135deg,#ffe259,#ff8a1f)}
+.chip:nth-child(3) span{background:linear-gradient(135deg,#d46bff,#4f7bff)}
 
 @media (prefers-reduced-motion:reduce){
   .ring{animation-duration:2.6s}.badge svg{animation:none!important}
@@ -98,11 +99,11 @@ h1{font-size:25px;font-weight:750;letter-spacing:-.3px;margin-bottom:10px}
 
   <div class="badge" id="badge" data-state="loading" aria-live="polite">
     <div class="ring"></div>
-    <svg class="i-load" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7.5 3v5.2c0 4.6-3.1 8.4-7.5 9.8-4.4-1.4-7.5-5.2-7.5-9.8V6L12 3z" fill="rgba(255,255,255,.18)"/><path d="M9 12l2.2 2.2L15.5 10"/></svg>
-    <svg class="i-ok" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5" stroke-width="1.8" fill="rgba(255,255,255,.18)"/><path d="M7.5 12.5l3 3 6-6.5"/></svg>
-    <svg class="i-ban" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"><circle cx="12" cy="12" r="9.5" fill="rgba(255,255,255,.18)"/><path d="M5.5 5.5l13 13"/></svg>
-    <svg class="i-warn" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2l9.6 16.6H2.4L12 3.2z" fill="rgba(255,255,255,.18)"/><path d="M12 9.8v4.6"/><circle cx="12" cy="17.3" r=".5" fill="#fff"/></svg>
-    <svg class="i-err" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5" stroke-width="1.8" fill="rgba(255,255,255,.18)"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7"/></svg>
+    <svg class="i-load" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7.5 3v5.2c0 4.6-3.1 8.4-7.5 9.8-4.4-1.4-7.5-5.2-7.5-9.8V6L12 3z" fill="rgba(255,255,255,.22)"/><path d="M9 12l2.2 2.2L15.5 10"/></svg>
+    <svg class="i-ok" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5" stroke-width="1.8" fill="rgba(255,255,255,.22)"/><path d="M7.5 12.5l3 3 6-6.5"/></svg>
+    <svg class="i-ban" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"><circle cx="12" cy="12" r="9.5" fill="rgba(255,255,255,.22)"/><path d="M5.5 5.5l13 13"/></svg>
+    <svg class="i-warn" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2l9.6 16.6H2.4L12 3.2z" fill="rgba(255,255,255,.22)"/><path d="M12 9.8v4.6"/><circle cx="12" cy="17.3" r=".5" fill="#fff"/></svg>
+    <svg class="i-err" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5" stroke-width="1.8" fill="rgba(255,255,255,.22)"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7"/></svg>
   </div>
 
   <h1 id="title">Checking your account</h1>
@@ -150,7 +151,10 @@ function setState(state,title,message){
   $("retryBtn").style.display=(state==="error"||state==="warning")?"flex":"none";
 }
 
+let busy=false;
 async function verify(){
+  if(busy)return;
+  busy=true;
   setState("loading","Checking your account","Please wait a moment while we securely check your account.");
   try{
     const initData=tg.initData;
@@ -176,6 +180,8 @@ async function verify(){
   }catch(err){
     console.error(err);
     setState("error","No connection","Could not reach the server. Check your internet and try again.");
+  }finally{
+    busy=false;
   }
 }
 
