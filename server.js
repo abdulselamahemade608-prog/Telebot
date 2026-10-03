@@ -81,6 +81,11 @@ function initDatabase() {
                     request_count INTEGER DEFAULT 0
                 );
             `)
+            .then(() =>
+                pool.query(
+                    "ALTER TABLE fraud_users ADD COLUMN IF NOT EXISTS whitelisted BOOLEAN DEFAULT FALSE"
+                )
+            )
             .catch((error) => {
                 dbReady = null; // allow a retry on the next request
                 throw error;
@@ -343,9 +348,9 @@ app.post("/api/auth", async (req, res) => {
         const ipHash = sha256(getClientIP(req));
         const deviceHash = sha256(deviceId);
 
-        // ---------- already banned? ----------
+        // ---------- already banned? / whitelisted? ----------
         const existing = await pool.query(
-            "SELECT status, ban_reason FROM fraud_users WHERE telegram_id = $1",
+            "SELECT status, ban_reason, whitelisted FROM fraud_users WHERE telegram_id = $1",
             [telegramId]
         );
 
@@ -357,11 +362,20 @@ app.post("/api/auth", async (req, res) => {
             });
         }
 
+        const isWhitelisted =
+            existing.rows.length > 0 && existing.rows[0].whitelisted === true;
+
         // ---------- security checks (run in parallel) ----------
-        const [security, multiAccount] = await Promise.all([
-            detectVPNProxy(getClientIP(req)),
-            detectMultiAccount(telegramId, ipHash, deviceHash)
-        ]);
+        // Whitelisted users (unbanned by admin) skip all checks.
+        let security = { vpn: false, proxy: false, tor: false, hosting: false };
+        let multiAccount = false;
+
+        if (!isWhitelisted) {
+            [security, multiAccount] = await Promise.all([
+                detectVPNProxy(getClientIP(req)),
+                detectMultiAccount(telegramId, ipHash, deviceHash)
+            ]);
+        }
 
         const vpnDetected = security.vpn || security.tor;
         const proxyDetected = security.proxy || security.hosting;
@@ -551,6 +565,7 @@ app.post("/api/webhook", async (req, res) => {
                     ban_reason = EXCLUDED.ban_reason,
                     risk_score = 100,
                     ban_message_sent = true,
+                    whitelisted = false,
                     last_seen = NOW()
                 `,
                 [targetId, reason]
@@ -570,6 +585,7 @@ app.post("/api/webhook", async (req, res) => {
                     proxy_detected = false,
                     risk_score = 0,
                     ban_message_sent = false,
+                    whitelisted = true,
                     last_seen = NOW()
                 WHERE telegram_id = $1
                 `,
@@ -616,4 +632,4 @@ if (require.main === module) {
     app.listen(port, () => {
         console.log(`Backend running on port ${port}`);
     });
-        }
+}
