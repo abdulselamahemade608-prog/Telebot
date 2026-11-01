@@ -30,6 +30,7 @@ const BOT_TOKEN = process.env.BOT_TOKEN;
 const DATABASE_URL = process.env.DATABASE_URL;
 const BOT_USERNAME = process.env.BOT_USERNAME;
 const ADMIN_ID = process.env.ADMIN_ID;
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 const MINI_APP_URL =
     process.env.MINI_APP_URL ||
     "https://abdulselamahemade608-prog.github.io/Telebot/";
@@ -38,6 +39,11 @@ if (!BOT_TOKEN) console.warn("WARNING: BOT_TOKEN is missing.");
 if (!DATABASE_URL) console.warn("WARNING: DATABASE_URL is missing.");
 if (!BOT_USERNAME) console.warn("WARNING: BOT_USERNAME is missing.");
 if (!ADMIN_ID) console.warn("WARNING: ADMIN_ID is missing.");
+if (!WEBHOOK_SECRET) {
+    console.warn(
+        "WARNING: WEBHOOK_SECRET is missing. /ban and /unban are disabled until it is set."
+    );
+}
 
 // =====================================================
 // DATABASE
@@ -84,6 +90,11 @@ function initDatabase() {
             .then(() =>
                 pool.query(
                     "ALTER TABLE fraud_users ADD COLUMN IF NOT EXISTS whitelisted BOOLEAN DEFAULT FALSE"
+                )
+            )
+            .then(() =>
+                pool.query(
+                    "CREATE INDEX IF NOT EXISTS fraud_users_device_idx ON fraud_users (device_hash)"
                 )
             )
             .catch((error) => {
@@ -147,11 +158,35 @@ function safeEqualHex(a, b) {
     return bufA.length === bufB.length && crypto.timingSafeEqual(bufA, bufB);
 }
 
+function safeEqualText(a, b) {
+    const hashA = crypto.createHash("sha256").update(String(a)).digest();
+    const hashB = crypto.createHash("sha256").update(String(b)).digest();
+
+    return crypto.timingSafeEqual(hashA, hashB);
+}
+
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+}
+
 function getClientIP(req) {
+    const vercelForwarded = req.headers["x-vercel-forwarded-for"];
     const forwarded = req.headers["x-forwarded-for"];
+    const realIp = req.headers["x-real-ip"];
+
+    if (vercelForwarded) {
+        return String(vercelForwarded).split(",")[0].trim();
+    }
 
     if (forwarded) {
-        return forwarded.split(",")[0].trim();
+        return String(forwarded).split(",")[0].trim();
+    }
+
+    if (realIp) {
+        return String(realIp).trim();
     }
 
     return req.socket.remoteAddress || "unknown";
@@ -219,11 +254,13 @@ async function detectVPNProxy(ip) {
 
     try {
         const response = await fetch(
-            `https://ipwho.is/${encodeURIComponent(ip)}`
+            `https://ipwho.is/${encodeURIComponent(ip)}`,
+            { signal: AbortSignal.timeout(4000) }
         );
         const data = await response.json();
 
         if (!data || data.success === false) {
+            console.warn("IP detection returned no data for this request.");
             return clean;
         }
 
@@ -236,6 +273,8 @@ async function detectVPNProxy(ip) {
             hosting: Boolean(security.hosting)
         };
     } catch (error) {
+        // If the IP service is down or slow we let the user through
+        // instead of blocking real people because of our own outage.
         console.error("IP detection error:", error.message);
         return clean;
     }
@@ -244,8 +283,10 @@ async function detectVPNProxy(ip) {
 // =====================================================
 // MULTIPLE ACCOUNT DETECTION
 // =====================================================
+// Only the device ID is used. Using the IP address would ban
+// family members and friends on the same Wi-Fi or mobile network.
 
-async function detectMultiAccount(telegramId, ipHash, deviceHash) {
+async function detectMultiAccount(telegramId, deviceHash) {
     if (!pool) return false;
 
     const result = await pool.query(
@@ -254,13 +295,10 @@ async function detectMultiAccount(telegramId, ipHash, deviceHash) {
         FROM fraud_users
         WHERE status = 'verified'
         AND telegram_id <> $1
-        AND (
-            device_hash = $2
-            OR (ip_hash = $3 AND device_hash <> $4)
-        )
+        AND device_hash = $2
         LIMIT 1
         `,
-        [telegramId, deviceHash, ipHash, deviceHash]
+        [telegramId, deviceHash]
     );
 
     return result.rows.length > 0;
@@ -373,7 +411,7 @@ app.post("/api/auth", async (req, res) => {
         if (!isWhitelisted) {
             [security, multiAccount] = await Promise.all([
                 detectVPNProxy(getClientIP(req)),
-                detectMultiAccount(telegramId, ipHash, deviceHash)
+                detectMultiAccount(telegramId, deviceHash)
             ]);
         }
 
@@ -512,9 +550,23 @@ app.post("/api/auth", async (req, res) => {
 // =====================================================
 // ADMIN: /ban and /unban (Telegram webhook)
 // =====================================================
+// The webhook must be registered with a secret_token, and the same
+// value must be saved in Vercel as WEBHOOK_SECRET. Without it anyone
+// could send a fake update that pretends to come from the admin.
 
 app.post("/api/webhook", async (req, res) => {
     try {
+        // ---------- verify the request really comes from Telegram ----------
+        const receivedSecret = req.headers["x-telegram-bot-api-secret-token"];
+
+        if (
+            !WEBHOOK_SECRET ||
+            !receivedSecret ||
+            !safeEqualText(receivedSecret, WEBHOOK_SECRET)
+        ) {
+            return res.status(403).json({ ok: false });
+        }
+
         const message = req.body && req.body.message;
 
         // Telegram always needs a quick 200 reply
@@ -573,7 +625,7 @@ app.post("/api/webhook", async (req, res) => {
 
             await sendTelegramMessage(
                 chatId,
-                `🚫 User <code>${targetId}</code> has been banned.\nReason: ${reason}`
+                `🚫 User <code>${targetId}</code> has been banned.\nReason: ${escapeHtml(reason)}`
             );
         } else {
             const result = await pool.query(
