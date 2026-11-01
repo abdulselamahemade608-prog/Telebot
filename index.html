@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -370,9 +369,9 @@ h1 {
 
         <button class="btn ok" id="doneBtn" type="button">
             <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M21 3L10 14M21 3l-7 18-4-7-7-4 18-7z"/>
+                <path d="M5.5 12.8l4.2 4.2L18.5 7.5"/>
             </svg>
-            Continue in Telegram
+            Close
         </button>
 
         <button class="btn retry" id="retryBtn" type="button">
@@ -504,49 +503,17 @@ function getDeviceId() {
 }
 
 // ==========================================
-// CONTINUE TO BOT
+// CLOSE MINI APP (user lands in the bot chat)
 // ==========================================
 
-let continueUrl = null;
-let leaving = false;
-
-function backToBot() {
-    if (leaving) return;
-
-    if (!continueUrl) {
-        setState(
-            "error",
-            "Bot link unavailable",
-            "The server did not return the bot link. Please check BOT_USERNAME in your server settings."
-        );
-        return;
-    }
-
-    leaving = true;
-    $("doneBtn").disabled = true;
-
+function closeApp() {
     try {
-        if (tg && typeof tg.openTelegramLink === "function") {
-            tg.openTelegramLink(continueUrl);
-
-            setTimeout(() => {
-                try {
-                    tg.close();
-                } catch (error) {}
-            }, 500);
+        if (tg && typeof tg.close === "function") {
+            tg.close();
         } else {
-            window.location.href = continueUrl;
+            window.close();
         }
-    } catch (error) {
-        leaving = false;
-        $("doneBtn").disabled = false;
-
-        setState(
-            "error",
-            "Unable to open Telegram",
-            "Please open your bot manually and send /start verify."
-        );
-    }
+    } catch (error) {}
 }
 
 // ==========================================
@@ -615,15 +582,14 @@ async function verify() {
             data.ok === true &&
             data.status === "verified") {
 
-            continueUrl = data.continue_url || null;
-
             setState(
                 "success",
                 "Verification finished!",
-                "Your account has been checked successfully. Tap Continue below to return to the bot."
+                "Your account has been verified. Check the bot chat to continue."
             );
 
-            $("doneBtn").style.display = "flex";
+            // Close automatically; the bot already sent the message.
+            setTimeout(closeApp, 1500);
             return;
         }
 
@@ -688,7 +654,7 @@ async function verify() {
 // ==========================================
 
 $("retryBtn").addEventListener("click", verify);
-$("doneBtn").addEventListener("click", backToBot);
+$("doneBtn").addEventListener("click", closeApp);
 
 // ==========================================
 // START
