@@ -1,300 +1,705 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<title>Account check</title>
+<meta name="theme-color" content="#d9e3e8">
+<title>Account Verification</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
 <style>
-*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-
-:root{
-  --page:#d9e3e8;
-  --paper:#fbfcfd;
-  --ink:#10222c;
-  --ink-soft:#4d6270;
-  --line:#c3d0d8;
-  --accent:#0d6f8f;
-  --ok:#1b8a57;
-  --bad:#c53b36;
-  --warn:#c98300;
-  --err:#4a5fc1;
-  --stamp:var(--accent);
-  --shadow:0 1px 0 rgba(16,34,44,.06),0 18px 40px -18px rgba(16,34,44,.35);
-}
-:root[data-theme="dark"]{
-  --page:#0c161c;
-  --paper:#16252e;
-  --ink:#eaf1f4;
-  --ink-soft:#97aab5;
-  --line:#2a3d48;
-  --accent:#4cb8d9;
-  --ok:#4fd08f;
-  --bad:#ff7a73;
-  --warn:#f0b440;
-  --err:#8d9dff;
-  --shadow:0 1px 0 rgba(255,255,255,.04),0 18px 40px -18px rgba(0,0,0,.7);
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
 }
 
-html,body{height:100%}
-body{
-  min-height:100dvh;display:flex;align-items:center;justify-content:center;
-  padding:max(20px,env(safe-area-inset-top)) 20px max(20px,env(safe-area-inset-bottom));
-  background:var(--page);color:var(--ink);
-  font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Ethiopic","Nyala",Arial,sans-serif;
+:root {
+    --page: #d9e3e8;
+    --paper: #fbfcfd;
+    --ink: #10222c;
+    --soft: #4d6270;
+    --line: #c3d0d8;
+    --accent: #0d6f8f;
+    --ok: #1b8a57;
+    --bad: #c53b36;
+    --warn: #c98300;
+    --shadow: 0 18px 40px -18px rgba(16,34,44,.35);
 }
 
-/* ---------- the pass ---------- */
-.pass{
-  position:relative;width:100%;max-width:360px;
-  background:var(--paper);border-radius:22px;box-shadow:var(--shadow);
-  overflow:hidden;
-}
-.pass-top{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:16px 22px;border-bottom:1px solid var(--line);
-  font-size:13px;color:var(--ink-soft);
-}
-.pass-top strong{font-weight:650;color:var(--ink);font-size:14px}
-.dot{
-  width:9px;height:9px;border-radius:50%;background:var(--stamp);
-  transition:background .3s;
+:root[data-theme="dark"] {
+    --page: #0c161c;
+    --paper: #16252e;
+    --ink: #eaf1f4;
+    --soft: #97aab5;
+    --line: #2a3d48;
+    --accent: #4cb8d9;
+    --ok: #4fd08f;
+    --bad: #ff7a73;
+    --warn: #f0b440;
+    --shadow: 0 18px 40px -18px rgba(0,0,0,.7);
 }
 
-.pass-body{padding:34px 26px 30px;text-align:center}
-
-/* ---------- stamp ---------- */
-.stamp{
-  position:relative;width:132px;height:132px;margin:0 auto 28px;
-  color:var(--stamp);transition:color .3s;
-}
-.stamp svg.frame{position:absolute;inset:0;width:100%;height:100%}
-.stamp .outer{fill:none;stroke:currentColor;stroke-width:3}
-.stamp .inner{fill:none;stroke:currentColor;stroke-width:1.4;opacity:.55}
-.stamp .tick{fill:none;stroke:currentColor;stroke-width:1.4;opacity:.4}
-.stamp .glyph{
-  position:absolute;inset:0;display:none;align-items:center;justify-content:center;
-}
-.stamp .glyph svg{
-  width:54px;height:54px;fill:none;stroke:currentColor;
-  stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round;
+html, body {
+    min-height: 100%;
 }
 
-/* loading: dashed ring turns slowly */
-.stamp[data-state="loading"] .outer{
-  stroke-dasharray:4 9;stroke-linecap:round;
-  transform-origin:66px 66px;animation:turn 6s linear infinite;
+body {
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: max(20px, env(safe-area-inset-top))
+             20px
+             max(20px, env(safe-area-inset-bottom));
+    background: var(--page);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto,
+                 Arial, sans-serif;
 }
-.stamp[data-state="loading"] .tick{animation:turn 14s linear infinite reverse;transform-origin:66px 66px}
-.stamp[data-state="loading"] .g-load{display:flex}
-.stamp[data-state="loading"] .g-load svg{animation:breathe 1.6s ease-in-out infinite}
 
-/* result: the stamp lands */
-.stamp[data-state="success"],
-.stamp[data-state="banned"],
-.stamp[data-state="warning"],
-.stamp[data-state="error"]{animation:land .45s cubic-bezier(.2,.9,.25,1.1) both}
-.stamp[data-state="success"]{--stamp:var(--ok)}
-.stamp[data-state="banned"]{--stamp:var(--bad)}
-.stamp[data-state="warning"]{--stamp:var(--warn)}
-.stamp[data-state="error"]{--stamp:var(--err)}
+.pass {
+    width: 100%;
+    max-width: 380px;
+    overflow: hidden;
+    border-radius: 22px;
+    background: var(--paper);
+    box-shadow: var(--shadow);
+}
+
+.pass-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 17px 22px;
+    border-bottom: 1px solid var(--line);
+    color: var(--soft);
+    font-size: 13px;
+}
+
+.pass-top strong {
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--accent);
+}
+
+.pass-body {
+    padding: 32px 25px 30px;
+    text-align: center;
+}
+
+.stamp {
+    --stamp: var(--accent);
+    position: relative;
+    width: 124px;
+    height: 124px;
+    margin: 0 auto 27px;
+    color: var(--stamp);
+}
+
+.stamp[data-state="success"] {
+    --stamp: var(--ok);
+}
+
+.stamp[data-state="banned"] {
+    --stamp: var(--bad);
+}
+
+.stamp[data-state="warning"] {
+    --stamp: var(--warn);
+}
+
+.stamp[data-state="error"] {
+    --stamp: var(--bad);
+}
+
+.frame {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.outer {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 3;
+}
+
+.inner {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.4;
+    opacity: .55;
+}
+
+.tick {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.4;
+    opacity: .4;
+}
+
+.glyph {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.glyph svg {
+    width: 52px;
+    height: 52px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.stamp[data-state="loading"] .outer {
+    stroke-dasharray: 4 9;
+    stroke-linecap: round;
+    transform-origin: 62px 62px;
+    animation: spin 6s linear infinite;
+}
+
+.stamp[data-state="loading"] .g-load {
+    display: flex;
+}
+
 .stamp[data-state="success"] .g-ok,
 .stamp[data-state="banned"] .g-ban,
 .stamp[data-state="warning"] .g-warn,
-.stamp[data-state="error"] .g-err{display:flex}
-
-.stamp[data-state="success"],
-.stamp[data-state="banned"]{--tilt:-7deg}
-.stamp[data-state="warning"],
-.stamp[data-state="error"]{--tilt:0deg}
-
-@keyframes turn{to{transform:rotate(360deg)}}
-@keyframes breathe{0%,100%{transform:scale(.92);opacity:.7}50%{transform:scale(1);opacity:1}}
-@keyframes land{
-  0%{transform:scale(1.55) rotate(0deg);opacity:0}
-  60%{transform:scale(.96) rotate(var(--tilt,0deg));opacity:1}
-  100%{transform:scale(1) rotate(var(--tilt,0deg));opacity:1}
+.stamp[data-state="error"] .g-err {
+    display: flex;
 }
 
-/* ---------- text ---------- */
-h1{font-size:24px;line-height:1.2;font-weight:700;letter-spacing:-.01em;margin-bottom:10px}
-.msg{
-  color:var(--ink-soft);font-size:15px;line-height:1.6;
-  min-height:48px;max-width:30ch;margin:0 auto;
+.stamp[data-state="loading"] .g-load svg {
+    animation: breathe 1.5s ease-in-out infinite;
 }
 
-/* ---------- buttons ---------- */
-.btn{
-  display:none;width:100%;margin-top:26px;padding:15px 18px;border-radius:14px;
-  font:inherit;font-size:16px;font-weight:650;cursor:pointer;
-  align-items:center;justify-content:center;gap:9px;
-  transition:transform .12s,opacity .12s;
-}
-.btn svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2.3;stroke-linecap:round;stroke-linejoin:round}
-.btn:active{transform:scale(.98);opacity:.9}
-.btn:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
-.btn.ok{background:var(--ink);color:var(--paper);border:0}
-.btn.retry{background:transparent;color:var(--ink);border:1.5px solid var(--ink)}
-
-/* ---------- tear-off edge ---------- */
-.tear{
-  position:relative;height:0;border-top:2px dashed var(--line);margin:0 18px;
-}
-.tear::before,.tear::after{
-  content:"";position:absolute;top:-12px;width:22px;height:22px;border-radius:50%;
-  background:var(--page);
-}
-.tear::before{left:-29px}
-.tear::after{right:-29px}
-.pass-foot{
-  padding:16px 22px 18px;text-align:center;font-size:12.5px;color:var(--ink-soft);
+h1 {
+    margin-bottom: 11px;
+    font-size: 24px;
+    line-height: 1.25;
+    font-weight: 750;
+    overflow-wrap: anywhere;
 }
 
-@media (prefers-reduced-motion:reduce){
-  .stamp[data-state="loading"] .outer,
-  .stamp[data-state="loading"] .tick,
-  .stamp[data-state="loading"] .g-load svg{animation:none}
-  .stamp[data-state="success"],
-  .stamp[data-state="banned"],
-  .stamp[data-state="warning"],
-  .stamp[data-state="error"]{animation:none;transform:rotate(var(--tilt,0deg))}
+.msg {
+    max-width: 31ch;
+    min-height: 48px;
+    margin: 0 auto;
+    color: var(--soft);
+    font-size: 14px;
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+}
+
+.btn {
+    display: none;
+    width: 100%;
+    min-height: 50px;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    margin-top: 24px;
+    padding: 14px 16px;
+    border-radius: 13px;
+    font: inherit;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.btn svg {
+    width: 19px;
+    height: 19px;
+    flex-shrink: 0;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.btn:active {
+    transform: scale(.98);
+}
+
+.btn:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 3px;
+}
+
+.btn.ok {
+    border: 0;
+    background: var(--ink);
+    color: var(--paper);
+}
+
+.btn.retry {
+    border: 1.5px solid var(--line);
+    background: transparent;
+    color: var(--ink);
+}
+
+.tear {
+    position: relative;
+    height: 0;
+    margin: 0 18px;
+    border-top: 2px dashed var(--line);
+}
+
+.tear::before,
+.tear::after {
+    position: absolute;
+    top: -12px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--page);
+    content: "";
+}
+
+.tear::before {
+    left: -29px;
+}
+
+.tear::after {
+    right: -29px;
+}
+
+.pass-foot {
+    padding: 17px 20px 19px;
+    color: var(--soft);
+    text-align: center;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+@keyframes breathe {
+    0%, 100% { transform: scale(.92); opacity: .7; }
+    50% { transform: scale(1); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+    }
 }
 </style>
 </head>
+
 <body>
 <main class="pass">
 
-  <div class="pass-top">
-    <strong>Account check</strong>
-    <span class="dot" id="dot"></span>
-  </div>
+    <header class="pass-top">
+        <strong>Account Verification</strong>
+        <span class="dot" id="dot"></span>
+    </header>
 
-  <div class="pass-body">
-    <div class="stamp" id="stamp" data-state="loading" aria-live="polite">
-      <svg class="frame" viewBox="0 0 132 132" aria-hidden="true">
-        <circle class="outer" cx="66" cy="66" r="62"/>
-        <circle class="inner" cx="66" cy="66" r="52"/>
-        <circle class="tick" cx="66" cy="66" r="57" stroke-dasharray="1 7"/>
-      </svg>
+    <section class="pass-body">
 
-      <div class="glyph g-load" aria-hidden="true">
-        <svg viewBox="0 0 24 24"><path d="M12 3l7.5 3v5.2c0 4.6-3.1 8.4-7.5 9.8-4.4-1.4-7.5-5.2-7.5-9.8V6L12 3z"/></svg>
-      </div>
-      <div class="glyph g-ok" aria-hidden="true">
-        <svg viewBox="0 0 24 24"><path d="M5.5 12.8l4.2 4.2L18.5 7.5"/></svg>
-      </div>
-      <div class="glyph g-ban" aria-hidden="true">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/></svg>
-      </div>
-      <div class="glyph g-warn" aria-hidden="true">
-        <svg viewBox="0 0 24 24"><path d="M12 4l9 16H3L12 4z"/><path d="M12 10v4.5"/><path d="M12 17.6v.01"/></svg>
-      </div>
-      <div class="glyph g-err" aria-hidden="true">
-        <svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"/></svg>
-      </div>
-    </div>
+        <div class="stamp" id="stamp" data-state="loading"
+             role="img" aria-label="Verification status">
 
-    <h1 id="title">Checking your account</h1>
-    <p class="msg" id="message">Please wait a moment while we securely check your account.</p>
+            <svg class="frame" viewBox="0 0 124 124" aria-hidden="true">
+                <circle class="outer" cx="62" cy="62" r="58"/>
+                <circle class="inner" cx="62" cy="62" r="49"/>
+                <circle class="tick" cx="62" cy="62" r="53"
+                        stroke-dasharray="1 7"/>
+            </svg>
 
-    <button class="btn ok" id="doneBtn" type="button">
-      <svg viewBox="0 0 24 24"><path d="M21 3L10 14M21 3l-7 18-4-7-7-4 18-7z"/></svg>
-      Continue in Telegram
-    </button>
-    <button class="btn retry" id="retryBtn" type="button">
-      <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 10-2.3 6.1"/><path d="M20 4v7h-7"/></svg>
-      Try again
-    </button>
-  </div>
+            <div class="glyph g-load" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                    <path d="M12 3l7.5 3v5.2c0 4.6-3.1 8.4-7.5 9.8-4.4-1.4-7.5-5.2-7.5-9.8V6L12 3z"/>
+                </svg>
+            </div>
 
-  <div class="tear"></div>
-  <div class="pass-foot">One account check per person. It takes a few seconds.</div>
+            <div class="glyph g-ok" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                    <path d="M5.5 12.8l4.2 4.2L18.5 7.5"/>
+                </svg>
+            </div>
+
+            <div class="glyph g-ban" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="8.5"/>
+                    <path d="M6 6l12 12"/>
+                </svg>
+            </div>
+
+            <div class="glyph g-warn" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                    <path d="M12 4l9 16H3L12 4z"/>
+                    <path d="M12 10v4.5M12 17.6v.01"/>
+                </svg>
+            </div>
+
+            <div class="glyph g-err" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                    <path d="M7 7l10 10M17 7L7 17"/>
+                </svg>
+            </div>
+        </div>
+
+        <h1 id="title">Checking your account</h1>
+
+        <p class="msg" id="message" aria-live="polite">
+            Please wait while we securely check your account.
+        </p>
+
+        <button class="btn ok" id="doneBtn" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M21 3L10 14M21 3l-7 18-4-7-7-4 18-7z"/>
+            </svg>
+            Continue in Telegram
+        </button>
+
+        <button class="btn retry" id="retryBtn" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M20 11a8 8 0 10-2.3 6.1"/>
+                <path d="M20 4v7h-7"/>
+            </svg>
+            Try again
+        </button>
+
+    </section>
+
+    <div class="tear"></div>
+
+    <footer class="pass-foot">
+        Secure account verification. If you believe a ban is a mistake,
+        contact the administrator.
+    </footer>
 
 </main>
 
 <script>
-const tg=(window.Telegram&&window.Telegram.WebApp)||{initData:"",ready(){},expand(){},close(){window.close()}};
-try{tg.ready();tg.expand()}catch(e){}
+"use strict";
 
-// follow the Telegram light / dark setting
-(function(){
-  let scheme=tg.colorScheme;
-  if(!scheme&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches){scheme="dark"}
-  document.documentElement.dataset.theme=scheme==="dark"?"dark":"light";
-  try{tg.onEvent&&tg.onEvent("themeChanged",function(){
-    document.documentElement.dataset.theme=tg.colorScheme==="dark"?"dark":"light";
-  })}catch(e){}
-})();
+// ==========================================
+// TELEGRAM WEB APP
+// ==========================================
 
-const API_BASE = 'https://mrabdubot.vercel.app';
+const tg = window.Telegram?.WebApp || null;
 
-function getDeviceId(){
-  let id=null;
-  try{id=localStorage.getItem("device_installation_id")}catch(e){}
-  if(!id){
-    id=(crypto.randomUUID&&crypto.randomUUID())||String(Date.now())+Math.random().toString(16).slice(2);
-    try{localStorage.setItem("device_installation_id",id)}catch(e){}
-  }
-  return id;
+if (tg) {
+    try {
+        tg.ready();
+        tg.expand();
+    } catch (error) {
+        console.warn("Telegram WebApp initialization failed.");
+    }
 }
 
-const $=id=>document.getElementById(id);
+// ==========================================
+// THEME
+// ==========================================
 
-const DOT_COLOR={
-  loading:"var(--accent)",
-  success:"var(--ok)",
-  banned:"var(--bad)",
-  warning:"var(--warn)",
-  error:"var(--err)"
+function applyTheme() {
+    const dark = tg
+        ? tg.colorScheme === "dark"
+        : window.matchMedia &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+    document.documentElement.dataset.theme =
+        dark ? "dark" : "light";
+}
+
+applyTheme();
+
+if (tg && typeof tg.onEvent === "function") {
+    tg.onEvent("themeChanged", applyTheme);
+}
+
+// ==========================================
+// CONFIGURATION
+// ==========================================
+
+// Must match your deployed backend.
+const API_BASE = "https://mrabdubot.vercel.app";
+
+// ==========================================
+// ELEMENTS
+// ==========================================
+
+const $ = id => document.getElementById(id);
+
+const DOT_COLORS = {
+    loading: "var(--accent)",
+    success: "var(--ok)",
+    banned: "var(--bad)",
+    warning: "var(--warn)",
+    error: "var(--bad)"
 };
 
-function setState(state,title,message){
-  $("stamp").dataset.state=state;
-  $("dot").style.background=DOT_COLOR[state]||"var(--accent)";
-  $("title").textContent=title;
-  $("message").textContent=message;
-  $("doneBtn").style.display=state==="success"?"flex":"none";
-  $("retryBtn").style.display=(state==="error"||state==="warning")?"flex":"none";
+function setState(state, title, message) {
+    $("stamp").dataset.state = state;
+    $("dot").style.background =
+        DOT_COLORS[state] || DOT_COLORS.loading;
+
+    $("title").textContent = title;
+    $("message").textContent = message;
+
+    $("doneBtn").style.display =
+        state === "success" ? "flex" : "none";
+
+    $("retryBtn").style.display =
+        state === "error" || state === "warning"
+            ? "flex"
+            : "none";
 }
 
-let busy=false;
-async function verify(){
-  if(busy)return;
-  busy=true;
-  setState("loading","Checking your account","Please wait a moment while we securely check your account.");
-  try{
-    const initData=tg.initData;
-    if(!initData){
-      setState("warning","Open from Telegram","Telegram data is missing. Please open this page from the Telegram bot.");
-      return;
-    }
-    const res=await fetch(`${API_BASE}/api/auth`,{
-      method:"POST",
-      headers:{"Content-Type":"application/json","x-init-data":initData,"x-device":getDeviceId()}
-    });
-    const data=await res.json();
+// ==========================================
+// DEVICE ID
+// ==========================================
 
-    if(data.ok===true&&data.status==="verified"){
-      setState("success","You're all set","Tap the button below to go back to Telegram.");
-      return;
+// This is a device identifier for basic abuse detection.
+// It is not a guaranteed permanent hardware identifier.
+
+function getDeviceId() {
+    const storageKey = "device_installation_id";
+
+    try {
+        let id = localStorage.getItem(storageKey);
+
+        if (!id) {
+            id = window.crypto?.randomUUID
+                ? window.crypto.randomUUID()
+                : Date.now().toString(36) +
+                  Math.random().toString(36).slice(2);
+
+            localStorage.setItem(storageKey, id);
+        }
+
+        return id;
+    } catch (error) {
+        // Some browsers restrict localStorage.
+        // The server must not assume this is a stable device identity.
+        return window.crypto?.randomUUID
+            ? window.crypto.randomUUID()
+            : Date.now().toString(36) +
+              Math.random().toString(36).slice(2);
     }
-    if(data.status==="banned"){
-      setState("banned","Access blocked",data.message||"Your account has been blocked.");
-      return;
-    }
-    setState("error","Something went wrong",data.message||"Please try again.");
-  }catch(err){
-    console.error(err);
-    setState("error","No connection","Could not reach the server. Check your internet and try again.");
-  }finally{
-    busy=false;
-  }
 }
 
-$("retryBtn").addEventListener("click",verify);
-$("doneBtn").addEventListener("click",()=>tg.close());
-setState("loading","Checking your account","Please wait a moment while we securely check your account.");
+// ==========================================
+// CONTINUE TO BOT
+// ==========================================
+
+let continueUrl = null;
+let leaving = false;
+
+function backToBot() {
+    if (leaving) return;
+
+    if (!continueUrl) {
+        setState(
+            "error",
+            "Bot link unavailable",
+            "The server did not return the bot link. Please check BOT_USERNAME in your server settings."
+        );
+        return;
+    }
+
+    leaving = true;
+    $("doneBtn").disabled = true;
+
+    try {
+        if (tg && typeof tg.openTelegramLink === "function") {
+            tg.openTelegramLink(continueUrl);
+
+            setTimeout(() => {
+                try {
+                    tg.close();
+                } catch (error) {}
+            }, 500);
+        } else {
+            window.location.href = continueUrl;
+        }
+    } catch (error) {
+        leaving = false;
+        $("doneBtn").disabled = false;
+
+        setState(
+            "error",
+            "Unable to open Telegram",
+            "Please open your bot manually and send /start verify."
+        );
+    }
+}
+
+// ==========================================
+// VERIFICATION REQUEST
+// ==========================================
+
+let busy = false;
+
+async function verify() {
+    if (busy) return;
+
+    busy = true;
+    $("retryBtn").disabled = true;
+
+    setState(
+        "loading",
+        "Checking your account",
+        "Please wait while we securely check your account."
+    );
+
+    try {
+        if (!tg || !tg.initData) {
+            setState(
+                "warning",
+                "Open from Telegram",
+                "Telegram authentication data is missing. Open this verification page using the VERIFY button in your bot."
+            );
+            return;
+        }
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(
+            () => controller.abort(),
+            15000
+        );
+
+        let response;
+
+        try {
+            response = await fetch(`${API_BASE}/api/auth`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "x-init-data": tg.initData,
+                    "x-device": getDeviceId()
+                },
+                signal: controller.signal
+            });
+        } finally {
+            clearTimeout(timeoutId);
+        }
+
+        let data;
+
+        try {
+            data = await response.json();
+        } catch {
+            throw new Error("The server returned an invalid response.");
+        }
+
+        // --------------------------------------
+        // SUCCESS
+        // --------------------------------------
+
+        if (response.ok &&
+            data.ok === true &&
+            data.status === "verified") {
+
+            continueUrl = data.continue_url || null;
+
+            setState(
+                "success",
+                "Verification finished!",
+                "Your account has been checked successfully. Tap Continue below to return to the bot."
+            );
+
+            $("doneBtn").style.display = "flex";
+            return;
+        }
+
+        // --------------------------------------
+        // BANNED
+        // --------------------------------------
+
+        if (data.status === "banned") {
+            setState(
+                "banned",
+                "Access blocked",
+                data.message ||
+                "Your account is permanently banned. Contact the administrator if you believe this is a mistake."
+            );
+
+            return;
+        }
+
+        // --------------------------------------
+        // OTHER SERVER ERRORS
+        // --------------------------------------
+
+        if (response.status === 403) {
+            setState(
+                "error",
+                "Access denied",
+                data.message ||
+                "The server could not authorize this verification."
+            );
+
+            return;
+        }
+
+        setState(
+            "error",
+            "Verification failed",
+            data.message ||
+            "We could not complete verification. Please try again."
+        );
+
+    } catch (error) {
+        console.error("Verification error:", error);
+
+        setState(
+            "error",
+            error.name === "AbortError"
+                ? "Request timed out"
+                : "Connection problem",
+            error.name === "AbortError"
+                ? "The server took too long to respond. Please try again."
+                : "Could not reach the verification server. Check your connection and try again."
+        );
+
+    } finally {
+        busy = false;
+        $("retryBtn").disabled = false;
+    }
+}
+
+// ==========================================
+// EVENTS
+// ==========================================
+
+$("retryBtn").addEventListener("click", verify);
+$("doneBtn").addEventListener("click", backToBot);
+
+// ==========================================
+// START
+// ==========================================
+
+setState(
+    "loading",
+    "Checking your account",
+    "Please wait while we securely check your account."
+);
+
 verify();
 </script>
 </body>
