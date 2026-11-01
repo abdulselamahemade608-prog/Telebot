@@ -1,4 +1,3 @@
-
 const express = require("express");
 const crypto = require("crypto");
 const { Pool } = require("pg");
@@ -34,7 +33,6 @@ app.use((req, res, next) => {
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const DATABASE_URL = process.env.DATABASE_URL;
-const BOT_USERNAME = process.env.BOT_USERNAME;
 const ADMIN_ID = process.env.ADMIN_ID;
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 
@@ -188,12 +186,75 @@ async function telegram(method, data = {}) {
     return result.result;
 }
 
-async function sendTelegramMessage(chatId, text) {
+async function sendTelegramMessage(chatId, text, extra = {}) {
     return telegram("sendMessage", {
         chat_id: chatId,
         text,
-        parse_mode: "HTML"
+        parse_mode: "HTML",
+        ...extra
     });
+}
+
+// ==========================================
+// SEND "SUCCESSFULLY VERIFIED" MESSAGE (ONCE)
+// ==========================================
+
+async function sendVerifiedMessage(telegramId, firstName) {
+    // Atomic claim: only one request can flip false -> true,
+    // so the message is never sent twice.
+    const claim = await pool.query(
+        `
+        UPDATE fraud_users
+        SET verification_message_sent = true
+        WHERE telegram_id = $1
+          AND verification_message_sent = false
+        RETURNING telegram_id
+        `,
+        [telegramId]
+    );
+
+    if (claim.rowCount === 0) {
+        return false;
+    }
+
+    try {
+        await sendTelegramMessage(
+            telegramId,
+            "✅ <b>Successfully verified!</b>\n\n" +
+            `Welcome, <b>${escapeHtml(firstName)}</b>. ` +
+            "Your account has been verified.\n\n" +
+            "Press the button below to open the main menu.",
+            {
+                reply_markup: {
+                    inline_keyboard: [
+                        [
+                            {
+                                text: "Main Menu",
+                                callback_data: "main_menu"
+                            }
+                        ]
+                    ]
+                }
+            }
+        );
+
+        return true;
+
+    } catch (error) {
+        console.error("VERIFIED MESSAGE ERROR:", error.message);
+
+        // Allow a retry on the next verification
+        await pool.query(
+            `
+            UPDATE fraud_users
+            SET verification_message_sent = false
+            WHERE telegram_id = $1
+            `,
+            [telegramId]
+        ).catch(() => {});
+
+        return false;
+    }
 }
 
 // ==========================================
@@ -571,16 +632,21 @@ app.post("/api/auth", async (req, res) => {
             ]
         );
 
-        const continueUrl = BOT_USERNAME
-            ? `https://t.me/${BOT_USERNAME}?start=verify`
-            : null;
+        // ==========================================
+        // SEND SUCCESS MESSAGE DIRECTLY IN THE BOT
+        // ==========================================
+
+        const messageSent = await sendVerifiedMessage(
+            telegramId,
+            firstName
+        );
 
         return res.json({
             ok: true,
             status: "verified",
             message: "Verification finished!",
             telegram_id: telegramId,
-            continue_url: continueUrl
+            message_sent: messageSent
         });
 
     } catch (error) {
