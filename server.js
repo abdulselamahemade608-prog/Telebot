@@ -155,6 +155,10 @@ function getClientIP(req) {
     ).toString().split(",")[0].trim();
 }
 
+function isAdmin(id) {
+    return Boolean(ADMIN_ID) && String(id) === String(ADMIN_ID);
+}
+
 // ==========================================
 // TELEGRAM API
 // ==========================================
@@ -193,6 +197,48 @@ async function sendTelegramMessage(chatId, text, extra = {}) {
         parse_mode: "HTML",
         ...extra
     });
+}
+
+// ==========================================
+// BOT MESSAGES TO USERS
+// ==========================================
+
+async function sendBanMessage(telegramId, reason) {
+    try {
+        await sendTelegramMessage(
+            telegramId,
+            "🚫 <b>Account Permanently Banned</b>\n\n" +
+            "Your account has been blocked because multiple " +
+            "accounts or a policy violation was detected.\n\n" +
+            `Reason: ${escapeHtml(reason)}`
+        );
+    } catch (error) {
+        console.error("BAN MESSAGE ERROR:", error.message);
+    }
+}
+
+async function sendUnbanMessage(telegramId) {
+    try {
+        await sendTelegramMessage(
+            telegramId,
+            "✅ <b>Your account has been unbanned.</b>\n\n" +
+            "You can use the bot again. Press the button below.",
+            {
+                reply_markup: {
+                    inline_keyboard: [
+                        [
+                            {
+                                text: "Main Menu",
+                                callback_data: "main_menu"
+                            }
+                        ]
+                    ]
+                }
+            }
+        );
+    } catch (error) {
+        console.error("UNBAN MESSAGE ERROR:", error.message);
+    }
 }
 
 // ==========================================
@@ -255,6 +301,74 @@ async function sendVerifiedMessage(telegramId, firstName) {
 
         return false;
     }
+}
+
+// ==========================================
+// ADMIN ACTIONS: BAN / UNBAN
+// ==========================================
+
+async function banUser(targetId, reason) {
+    await pool.query(
+        `
+        INSERT INTO fraud_users (
+            telegram_id,
+            status,
+            ban_reason,
+            risk_score,
+            ban_message_sent,
+            whitelisted
+        )
+        VALUES ($1,'banned',$2,100,true,false)
+        ON CONFLICT (telegram_id)
+        DO UPDATE SET
+            status = 'banned',
+            ban_reason = EXCLUDED.ban_reason,
+            risk_score = 100,
+            ban_message_sent = true,
+            whitelisted = false,
+            last_seen = NOW()
+        `,
+        [targetId, reason]
+    );
+
+    await sendBanMessage(targetId, reason);
+
+    return (
+        `User ${targetId} has been banned.\n` +
+        `Reason: ${reason}`
+    );
+}
+
+async function unbanUser(targetId) {
+    const result = await pool.query(
+        `
+        UPDATE fraud_users
+        SET status = 'verified',
+            ban_reason = NULL,
+            vpn_detected = false,
+            proxy_detected = false,
+            risk_score = 0,
+            ban_message_sent = false,
+            whitelisted = true,
+            last_seen = NOW()
+        WHERE telegram_id = $1
+        `,
+        [targetId]
+    );
+
+    if (result.rowCount === 0) {
+        return {
+            found: false,
+            message: `User ${targetId} was not found.`
+        };
+    }
+
+    await sendUnbanMessage(targetId);
+
+    return {
+        found: true,
+        message: `User ${targetId} has been unbanned.`
+    };
 }
 
 // ==========================================
@@ -577,6 +691,9 @@ app.post("/api/auth", async (req, res) => {
                 ]
             );
 
+            // Tell the user inside the bot as well
+            await sendBanMessage(telegramId, reason);
+
             return res.status(403).json({
                 ok: false,
                 status: "banned",
@@ -739,7 +856,104 @@ app.get("/api/status", async (req, res) => {
 });
 
 // ==========================================
-// ADMIN WEBHOOK: /ban AND /unban
+// ADMIN API FOR TELEBOT CREATOR (/ban, /unban)
+// ==========================================
+// GET /api/admin?action=ban|unban&admin=CALLER_ID&target=USER_ID&reason=...
+// Header: x-status-key
+
+app.get("/api/admin", async (req, res) => {
+    try {
+        const key = req.headers["x-status-key"];
+
+        if (
+            !WEBHOOK_SECRET ||
+            !key ||
+            !safeEqualText(key, WEBHOOK_SECRET)
+        ) {
+            return res.status(403).json({
+                ok: false,
+                status: "forbidden",
+                message: "Forbidden."
+            });
+        }
+
+        const caller = String(req.query.admin || "");
+
+        // Silent for everyone who is not the admin
+        if (!isAdmin(caller)) {
+            return res.json({
+                ok: false,
+                status: "not_admin",
+                message: "Not authorized."
+            });
+        }
+
+        const action = String(req.query.action || "");
+        const target = String(req.query.target || "");
+
+        if (action !== "ban" && action !== "unban") {
+            return res.status(400).json({
+                ok: false,
+                status: "error",
+                message: "Invalid action."
+            });
+        }
+
+        if (!/^\d+$/.test(target)) {
+            return res.status(400).json({
+                ok: false,
+                status: "error",
+                message: "Invalid user ID."
+            });
+        }
+
+        if (!pool) {
+            return res.status(500).json({
+                ok: false,
+                status: "error",
+                message: "Database is not configured."
+            });
+        }
+
+        await initDatabase();
+
+        if (action === "ban") {
+            const reason =
+                String(req.query.reason || "").trim().slice(0, 200) ||
+                "Banned by admin.";
+
+            const message = await banUser(target, reason);
+
+            return res.json({
+                ok: true,
+                status: "banned",
+                message
+            });
+        }
+
+        const result = await unbanUser(target);
+
+        return res.json({
+            ok: result.found,
+            status: result.found ? "unbanned" : "not_found",
+            message: result.message
+        });
+
+    } catch (error) {
+        console.error("ADMIN ERROR:", error.message);
+
+        return res.status(500).json({
+            ok: false,
+            status: "error",
+            message: "Server error. Please try again."
+        });
+    }
+});
+
+// ==========================================
+// OPTIONAL TELEGRAM WEBHOOK: /ban AND /unban
+// (Only works if this URL is the bot's real webhook.
+//  With Telebot Creator use /api/admin instead.)
 // ==========================================
 
 app.post("/api/webhook", async (req, res) => {
@@ -761,10 +975,7 @@ app.post("/api/webhook", async (req, res) => {
             return res.json({ ok: true });
         }
 
-        if (
-            !ADMIN_ID ||
-            String(message.from.id) !== String(ADMIN_ID)
-        ) {
+        if (!isAdmin(message.from.id)) {
             return res.json({ ok: true });
         }
 
@@ -803,63 +1014,17 @@ app.post("/api/webhook", async (req, res) => {
             const reason =
                 parts.slice(2).join(" ") || "Banned by admin.";
 
-            await pool.query(
-                `
-                INSERT INTO fraud_users (
-                    telegram_id,
-                    status,
-                    ban_reason,
-                    risk_score,
-                    ban_message_sent,
-                    whitelisted
-                )
-                VALUES ($1,'banned',$2,100,true,false)
-                ON CONFLICT (telegram_id)
-                DO UPDATE SET
-                    status = 'banned',
-                    ban_reason = EXCLUDED.ban_reason,
-                    risk_score = 100,
-                    ban_message_sent = true,
-                    whitelisted = false,
-                    last_seen = NOW()
-                `,
-                [targetId, reason]
-            );
+            const text = await banUser(targetId, reason);
+
+            await sendTelegramMessage(chatId, escapeHtml(text));
+
+        } else {
+            const result = await unbanUser(targetId);
 
             await sendTelegramMessage(
                 chatId,
-                `User <code>${targetId}</code> has been banned.\n` +
-                `Reason: ${escapeHtml(reason)}`
+                escapeHtml(result.message)
             );
-
-        } else {
-            const result = await pool.query(
-                `
-                UPDATE fraud_users
-                SET status = 'verified',
-                    ban_reason = NULL,
-                    vpn_detected = false,
-                    proxy_detected = false,
-                    risk_score = 0,
-                    ban_message_sent = false,
-                    whitelisted = true,
-                    last_seen = NOW()
-                WHERE telegram_id = $1
-                `,
-                [targetId]
-            );
-
-            if (result.rowCount === 0) {
-                await sendTelegramMessage(
-                    chatId,
-                    `User <code>${targetId}</code> was not found.`
-                );
-            } else {
-                await sendTelegramMessage(
-                    chatId,
-                    `User <code>${targetId}</code> has been unbanned.`
-                );
-            }
         }
 
         return res.json({ ok: true });
