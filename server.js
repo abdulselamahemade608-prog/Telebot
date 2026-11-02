@@ -40,6 +40,9 @@ const MINI_APP_URL =
     process.env.MINI_APP_URL ||
     "https://abdulselamahemade608-prog.github.io/Telebot/";
 
+// Reward (USD) paid to the inviter when the friend verifies
+const REFERRAL_REWARD = 0.10;
+
 const pool = DATABASE_URL
     ? new Pool({
           connectionString: DATABASE_URL,
@@ -91,6 +94,24 @@ async function initDatabase() {
                 pool.query(`
                     CREATE INDEX IF NOT EXISTS fraud_users_device_idx
                     ON fraud_users(device_hash)
+                `)
+            )
+            .then(() =>
+                pool.query(`
+                    CREATE TABLE IF NOT EXISTS referrals (
+                        user_id BIGINT PRIMARY KEY,
+                        referrer_id BIGINT NOT NULL,
+                        rewarded BOOLEAN DEFAULT FALSE,
+                        claimed BOOLEAN DEFAULT FALSE,
+                        created_at TIMESTAMP DEFAULT NOW(),
+                        rewarded_at TIMESTAMP
+                    )
+                `)
+            )
+            .then(() =>
+                pool.query(`
+                    CREATE INDEX IF NOT EXISTS referrals_referrer_idx
+                    ON referrals(referrer_id)
                 `)
             )
             .catch(error => {
@@ -157,6 +178,18 @@ function getClientIP(req) {
 
 function isAdmin(id) {
     return Boolean(ADMIN_ID) && String(id) === String(ADMIN_ID);
+}
+
+function hasValidStatusKey(req) {
+    const key = req.headers["x-status-key"];
+
+    return Boolean(WEBHOOK_SECRET) &&
+        Boolean(key) &&
+        safeEqualText(key, WEBHOOK_SECRET);
+}
+
+function money(count) {
+    return Number((count * REFERRAL_REWARD).toFixed(2));
 }
 
 // ==========================================
@@ -241,6 +274,33 @@ async function sendUnbanMessage(telegramId) {
     }
 }
 
+async function sendReferralRewardMessage(referrerId, friendName) {
+    try {
+        await sendTelegramMessage(
+            referrerId,
+            "🎉 <b>New referral!</b>\n\n" +
+            `<b>${escapeHtml(friendName)}</b> joined with your link ` +
+            "and verified their account.\n" +
+            `You earned <b>$${REFERRAL_REWARD.toFixed(2)}</b>.\n\n` +
+            "Open the main menu to add it to your balance.",
+            {
+                reply_markup: {
+                    inline_keyboard: [
+                        [
+                            {
+                                text: "Main Menu",
+                                callback_data: "main_menu"
+                            }
+                        ]
+                    ]
+                }
+            }
+        );
+    } catch (error) {
+        console.error("REFERRAL MESSAGE ERROR:", error.message);
+    }
+}
+
 // ==========================================
 // SEND "SUCCESSFULLY VERIFIED" MESSAGE (ONCE)
 // ==========================================
@@ -301,6 +361,43 @@ async function sendVerifiedMessage(telegramId, firstName) {
 
         return false;
     }
+}
+
+// ==========================================
+// REFERRAL REWARD (WHEN THE FRIEND VERIFIES)
+// ==========================================
+
+async function rewardReferrer(telegramId, firstName) {
+    // Atomic: a referral can be rewarded only once, and only if
+    // the inviter is a verified (not banned) user.
+    const result = await pool.query(
+        `
+        UPDATE referrals r
+        SET rewarded = true,
+            rewarded_at = NOW()
+        WHERE r.user_id = $1
+          AND r.rewarded = false
+          AND EXISTS (
+              SELECT 1
+              FROM fraud_users f
+              WHERE f.telegram_id = r.referrer_id
+                AND f.status = 'verified'
+          )
+        RETURNING r.referrer_id
+        `,
+        [telegramId]
+    );
+
+    if (result.rowCount === 0) {
+        return false;
+    }
+
+    await sendReferralRewardMessage(
+        result.rows[0].referrer_id,
+        firstName
+    );
+
+    return true;
 }
 
 // ==========================================
@@ -758,6 +855,16 @@ app.post("/api/auth", async (req, res) => {
             firstName
         );
 
+        // ==========================================
+        // REWARD THE INVITER (ONCE)
+        // ==========================================
+
+        try {
+            await rewardReferrer(telegramId, firstName);
+        } catch (error) {
+            console.error("REFERRAL REWARD ERROR:", error.message);
+        }
+
         return res.json({
             ok: true,
             status: "verified",
@@ -783,13 +890,7 @@ app.post("/api/auth", async (req, res) => {
 
 app.get("/api/status", async (req, res) => {
     try {
-        const key = req.headers["x-status-key"];
-
-        if (
-            !WEBHOOK_SECRET ||
-            !key ||
-            !safeEqualText(key, WEBHOOK_SECRET)
-        ) {
+        if (!hasValidStatusKey(req)) {
             return res.status(403).json({
                 ok: false,
                 status: "forbidden"
@@ -856,6 +957,162 @@ app.get("/api/status", async (req, res) => {
 });
 
 // ==========================================
+// REFERRAL API FOR TELEBOT CREATOR
+// ==========================================
+// GET /api/referral?action=register&id=USER&ref=INVITER
+// GET /api/referral?action=stats&id=USER
+// GET /api/referral?action=claim&id=USER
+// Header: x-status-key
+
+app.get("/api/referral", async (req, res) => {
+    try {
+        if (!hasValidStatusKey(req)) {
+            return res.status(403).json({
+                ok: false,
+                status: "forbidden"
+            });
+        }
+
+        const action = String(req.query.action || "");
+        const id = String(req.query.id || "");
+
+        if (!/^\d+$/.test(id)) {
+            return res.status(400).json({
+                ok: false,
+                status: "error",
+                message: "Invalid user ID."
+            });
+        }
+
+        if (!pool) {
+            return res.status(500).json({
+                ok: false,
+                status: "error",
+                message: "Database is not configured."
+            });
+        }
+
+        await initDatabase();
+
+        // ------------------------------------------
+        // REGISTER: remember who invited this user
+        // ------------------------------------------
+
+        if (action === "register") {
+            const ref = String(req.query.ref || "");
+
+            if (!/^\d+$/.test(ref) || ref === id) {
+                return res.json({
+                    ok: false,
+                    status: "invalid_ref"
+                });
+            }
+
+            // Users already known to the system cannot be referred
+            const known = await pool.query(
+                `
+                SELECT 1
+                FROM fraud_users
+                WHERE telegram_id = $1
+                `,
+                [id]
+            );
+
+            if (known.rowCount > 0) {
+                return res.json({
+                    ok: true,
+                    status: "already_known"
+                });
+            }
+
+            await pool.query(
+                `
+                INSERT INTO referrals (user_id, referrer_id)
+                VALUES ($1, $2)
+                ON CONFLICT (user_id) DO NOTHING
+                `,
+                [id, ref]
+            );
+
+            return res.json({
+                ok: true,
+                status: "registered"
+            });
+        }
+
+        // ------------------------------------------
+        // STATS: invited friends and total earned
+        // ------------------------------------------
+
+        if (action === "stats") {
+            const result = await pool.query(
+                `
+                SELECT
+                    COUNT(*) FILTER (WHERE rewarded) AS invited,
+                    COUNT(*) FILTER (
+                        WHERE rewarded AND NOT claimed
+                    ) AS unclaimed
+                FROM referrals
+                WHERE referrer_id = $1
+                `,
+                [id]
+            );
+
+            const invited = Number(result.rows[0].invited) || 0;
+            const unclaimed = Number(result.rows[0].unclaimed) || 0;
+
+            return res.json({
+                ok: true,
+                status: "ok",
+                invited,
+                earned: money(invited),
+                unclaimed: money(unclaimed)
+            });
+        }
+
+        // ------------------------------------------
+        // CLAIM: atomically hand over unclaimed rewards
+        // ------------------------------------------
+
+        if (action === "claim") {
+            const result = await pool.query(
+                `
+                UPDATE referrals
+                SET claimed = true
+                WHERE referrer_id = $1
+                  AND rewarded = true
+                  AND claimed = false
+                RETURNING user_id
+                `,
+                [id]
+            );
+
+            return res.json({
+                ok: true,
+                status: "ok",
+                count: result.rowCount,
+                amount: money(result.rowCount)
+            });
+        }
+
+        return res.status(400).json({
+            ok: false,
+            status: "error",
+            message: "Invalid action."
+        });
+
+    } catch (error) {
+        console.error("REFERRAL ERROR:", error.message);
+
+        return res.status(500).json({
+            ok: false,
+            status: "error",
+            message: "Server error. Please try again."
+        });
+    }
+});
+
+// ==========================================
 // ADMIN API FOR TELEBOT CREATOR (/ban, /unban)
 // ==========================================
 // GET /api/admin?action=ban|unban&admin=CALLER_ID&target=USER_ID&reason=...
@@ -863,13 +1120,7 @@ app.get("/api/status", async (req, res) => {
 
 app.get("/api/admin", async (req, res) => {
     try {
-        const key = req.headers["x-status-key"];
-
-        if (
-            !WEBHOOK_SECRET ||
-            !key ||
-            !safeEqualText(key, WEBHOOK_SECRET)
-        ) {
+        if (!hasValidStatusKey(req)) {
             return res.status(403).json({
                 ok: false,
                 status: "forbidden",
@@ -1058,4 +1309,4 @@ if (require.main === module) {
     app.listen(port, () => {
         console.log(`Backend running on port ${port}`);
     });
-}
+            }
