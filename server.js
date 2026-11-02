@@ -41,6 +41,7 @@ const MINI_APP_URL =
     "https://abdulselamahemade608-prog.github.io/Telebot/";
 
 // Reward (USD) paid to the inviter when the friend verifies
+// (or when the admin unbans the friend)
 const REFERRAL_REWARD = 0.10;
 
 const pool = DATABASE_URL
@@ -364,7 +365,7 @@ async function sendVerifiedMessage(telegramId, firstName) {
 }
 
 // ==========================================
-// REFERRAL REWARD (WHEN THE FRIEND VERIFIES)
+// REFERRAL REWARD (VERIFY OR ADMIN UNBAN)
 // ==========================================
 
 async function rewardReferrer(telegramId, firstName) {
@@ -449,6 +450,7 @@ async function unbanUser(targetId) {
             whitelisted = true,
             last_seen = NOW()
         WHERE telegram_id = $1
+        RETURNING first_name
         `,
         [targetId]
     );
@@ -462,9 +464,24 @@ async function unbanUser(targetId) {
 
     await sendUnbanMessage(targetId);
 
+    // If this user came through a referral link and the inviter
+    // was not rewarded yet, reward the inviter now (only once).
+    let rewarded = false;
+
+    try {
+        const friendName = result.rows[0].first_name || "Your friend";
+        rewarded = await rewardReferrer(targetId, friendName);
+    } catch (error) {
+        console.error("UNBAN REWARD ERROR:", error.message);
+    }
+
     return {
         found: true,
-        message: `User ${targetId} has been unbanned.`
+        message:
+            `User ${targetId} has been unbanned.` +
+            (rewarded
+                ? `\nInviter rewarded $${REFERRAL_REWARD.toFixed(2)}.`
+                : "")
     };
 }
 
@@ -1309,4 +1326,4 @@ if (require.main === module) {
     app.listen(port, () => {
         console.log(`Backend running on port ${port}`);
     });
-            }
+                   }
