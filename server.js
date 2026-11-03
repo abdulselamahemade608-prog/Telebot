@@ -36,6 +36,11 @@ const DATABASE_URL = process.env.DATABASE_URL;
 const ADMIN_ID = process.env.ADMIN_ID;
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 
+// Binance API key (Enable Reading ONLY) of the account that
+// owns the Binance Pay UID users send money to.
+const BINANCE_API_KEY = process.env.BINANCE_API_KEY;
+const BINANCE_API_SECRET = process.env.BINANCE_API_SECRET;
+
 const MINI_APP_URL =
     process.env.MINI_APP_URL ||
     "https://abdulselamahemade608-prog.github.io/Telebot/";
@@ -43,6 +48,20 @@ const MINI_APP_URL =
 // Reward (USD) paid to the inviter when the friend verifies
 // (or when the admin unbans the friend)
 const REFERRAL_REWARD = 0.10;
+
+// Binance Pay deposit limits (USDT)
+const BINANCE_MIN = 0.01;
+const BINANCE_MAX = 5.00;
+
+// Only payments made in the last 72 hours can be claimed
+const BINANCE_WINDOW_HOURS = 72;
+
+const BINANCE_HOSTS = [
+    "https://api.binance.com",
+    "https://api1.binance.com",
+    "https://api2.binance.com",
+    "https://api3.binance.com"
+];
 
 const pool = DATABASE_URL
     ? new Pool({
@@ -52,6 +71,9 @@ const pool = DATABASE_URL
     : null;
 
 let dbReady = null;
+
+// Simple per-user cooldown for deposit checks (best effort)
+const depositCooldown = new Map();
 
 // ==========================================
 // DATABASE
@@ -113,6 +135,23 @@ async function initDatabase() {
                 pool.query(`
                     CREATE INDEX IF NOT EXISTS referrals_referrer_idx
                     ON referrals(referrer_id)
+                `)
+            )
+            .then(() =>
+                pool.query(`
+                    CREATE TABLE IF NOT EXISTS deposits (
+                        order_id TEXT PRIMARY KEY,
+                        user_id BIGINT NOT NULL,
+                        method TEXT,
+                        amount NUMERIC(18,8) NOT NULL,
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )
+                `)
+            )
+            .then(() =>
+                pool.query(`
+                    CREATE INDEX IF NOT EXISTS deposits_user_idx
+                    ON deposits(user_id)
                 `)
             )
             .catch(error => {
@@ -302,6 +341,22 @@ async function sendReferralRewardMessage(referrerId, friendName) {
     }
 }
 
+async function notifyAdminDeposit(userId, orderId, amount) {
+    if (!ADMIN_ID) return;
+
+    try {
+        await sendTelegramMessage(
+            ADMIN_ID,
+            "💰 <b>New Binance Pay deposit</b>\n\n" +
+            `User: <code>${escapeHtml(userId)}</code>\n` +
+            `Order ID: <code>${escapeHtml(orderId)}</code>\n` +
+            `Amount: <b>${amount.toFixed(2)} USDT</b>`
+        );
+    } catch (error) {
+        console.error("ADMIN DEPOSIT NOTICE ERROR:", error.message);
+    }
+}
+
 // ==========================================
 // SEND "SUCCESSFULLY VERIFIED" MESSAGE (ONCE)
 // ==========================================
@@ -399,6 +454,159 @@ async function rewardReferrer(telegramId, firstName) {
     );
 
     return true;
+}
+
+// ==========================================
+// BINANCE PAY: FIND A PAYMENT BY ORDER ID
+// ==========================================
+
+async function binancePayHistory(startMs, endMs) {
+    const params = new URLSearchParams({
+        startTimestamp: String(startMs),
+        endTimestamp: String(endMs),
+        limit: "100",
+        recvWindow: "10000",
+        timestamp: String(Date.now())
+    });
+
+    const query = params.toString();
+
+    const signature = crypto
+        .createHmac("sha256", BINANCE_API_SECRET)
+        .update(query)
+        .digest("hex");
+
+    let lastError = null;
+
+    // Try the main host first, then the backup hosts
+    for (const host of BINANCE_HOSTS) {
+        try {
+            const response = await fetch(
+                `${host}/sapi/v1/pay/transactions?${query}&signature=${signature}`,
+                {
+                    headers: { "X-MBX-APIKEY": BINANCE_API_KEY },
+                    signal: AbortSignal.timeout(8000)
+                }
+            );
+
+            const body = await response.json();
+
+            if (!response.ok) {
+                lastError = new Error(
+                    "Binance HTTP " + response.status + ": " +
+                    (body.msg || body.message || "request failed")
+                );
+                continue;
+            }
+
+            if (body && body.success === false) {
+                lastError = new Error(
+                    "Binance error: " +
+                    (body.message || body.msg || "unknown")
+                );
+                continue;
+            }
+
+            return Array.isArray(body.data) ? body.data : [];
+
+        } catch (error) {
+            lastError = error;
+        }
+    }
+
+    throw lastError || new Error("Binance request failed.");
+}
+
+function txMatchesOrder(tx, orderId) {
+    // The Order ID shown in the Binance app can appear as the
+    // transaction ID with or without a prefix such as "M_P_".
+    for (const value of Object.values(tx || {})) {
+        if (typeof value !== "string" && typeof value !== "number") {
+            continue;
+        }
+
+        const text = String(value);
+
+        if (
+            text === orderId ||
+            text.replace(/^[A-Za-z_]+/, "") === orderId
+        ) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function txUsdtAmount(tx) {
+    if (String(tx.currency || "").toUpperCase() === "USDT") {
+        const direct = Number(tx.amount);
+
+        if (Number.isFinite(direct)) {
+            return direct;
+        }
+    }
+
+    if (Array.isArray(tx.fundsDetail)) {
+        let total = 0;
+
+        for (const part of tx.fundsDetail) {
+            if (String(part.currency || "").toUpperCase() === "USDT") {
+                total += Number(part.amount) || 0;
+            }
+        }
+
+        if (total) {
+            return total;
+        }
+    }
+
+    return 0;
+}
+
+async function findBinancePayment(orderId) {
+    const now = Date.now();
+    const oldest = now - BINANCE_WINDOW_HOURS * 3600 * 1000;
+
+    let end = now;
+
+    // The API returns at most 100 records per request,
+    // so walk backwards in time (max 5 pages).
+    for (let page = 0; page < 5; page++) {
+        const list = await binancePayHistory(oldest, end);
+
+        if (list.length === 0) {
+            return null;
+        }
+
+        for (const tx of list) {
+            if (txMatchesOrder(tx, orderId)) {
+                return tx;
+            }
+        }
+
+        if (list.length < 100) {
+            return null;
+        }
+
+        const times = list
+            .map(tx => Number(tx.transactionTime))
+            .filter(time => Number.isFinite(time) && time > 0);
+
+        if (times.length === 0) {
+            return null;
+        }
+
+        const minTime = Math.min(...times);
+
+        if (!(minTime < end)) {
+            return null;
+        }
+
+        end = minTime - 1;
+    }
+
+    return null;
 }
 
 // ==========================================
@@ -1130,6 +1338,207 @@ app.get("/api/referral", async (req, res) => {
 });
 
 // ==========================================
+// DEPOSIT API FOR TELEBOT CREATOR
+// ==========================================
+// GET /api/deposit?action=binance&id=USER&order=ORDER_ID
+// Header: x-status-key
+//
+// status: credited | not_found | used | invalid | too_small |
+//         too_large | not_usdt | slow_down | banned |
+//         not_verified | not_configured | error
+
+app.get("/api/deposit", async (req, res) => {
+    try {
+        if (!hasValidStatusKey(req)) {
+            return res.status(403).json({
+                ok: false,
+                status: "forbidden"
+            });
+        }
+
+        const action = String(req.query.action || "");
+        const id = String(req.query.id || "");
+        const order = String(req.query.order || "").trim();
+
+        if (action !== "binance") {
+            return res.status(400).json({
+                ok: false,
+                status: "error",
+                message: "Invalid action."
+            });
+        }
+
+        if (!/^\d+$/.test(id)) {
+            return res.status(400).json({
+                ok: false,
+                status: "error",
+                message: "Invalid user ID."
+            });
+        }
+
+        if (!/^\d{10,25}$/.test(order)) {
+            return res.json({
+                ok: false,
+                status: "invalid"
+            });
+        }
+
+        if (!pool) {
+            return res.status(500).json({
+                ok: false,
+                status: "error"
+            });
+        }
+
+        if (!BINANCE_API_KEY || !BINANCE_API_SECRET) {
+            return res.json({
+                ok: false,
+                status: "not_configured"
+            });
+        }
+
+        await initDatabase();
+
+        // Cooldown: one check every 4 seconds per user
+        const lastCheck = depositCooldown.get(id) || 0;
+
+        if (Date.now() - lastCheck < 4000) {
+            return res.json({
+                ok: false,
+                status: "slow_down"
+            });
+        }
+
+        depositCooldown.set(id, Date.now());
+
+        // The user must be verified and not banned
+        const user = await pool.query(
+            `
+            SELECT status
+            FROM fraud_users
+            WHERE telegram_id = $1
+            `,
+            [id]
+        );
+
+        if (user.rows.length === 0) {
+            return res.json({
+                ok: false,
+                status: "not_verified"
+            });
+        }
+
+        if (user.rows[0].status === "banned") {
+            return res.json({
+                ok: false,
+                status: "banned"
+            });
+        }
+
+        // Each order can be credited only once
+        const used = await pool.query(
+            `
+            SELECT 1
+            FROM deposits
+            WHERE order_id = $1
+            `,
+            [order]
+        );
+
+        if (used.rowCount > 0) {
+            return res.json({
+                ok: false,
+                status: "used"
+            });
+        }
+
+        // Look for the payment in the Binance Pay history
+        let payment;
+
+        try {
+            payment = await findBinancePayment(order);
+        } catch (error) {
+            console.error("BINANCE ERROR:", error.message);
+
+            return res.json({
+                ok: false,
+                status: "error"
+            });
+        }
+
+        if (!payment) {
+            return res.json({
+                ok: false,
+                status: "not_found"
+            });
+        }
+
+        const rawAmount = txUsdtAmount(payment);
+
+        // Only incoming USDT payments count
+        if (!(rawAmount > 0)) {
+            return res.json({
+                ok: false,
+                status: "not_usdt"
+            });
+        }
+
+        // Never credit more than what was received (floor to cents)
+        const amount = Math.floor(rawAmount * 100) / 100;
+
+        if (amount < BINANCE_MIN) {
+            return res.json({
+                ok: false,
+                status: "too_small",
+                amount
+            });
+        }
+
+        if (amount > BINANCE_MAX) {
+            return res.json({
+                ok: false,
+                status: "too_large",
+                amount
+            });
+        }
+
+        // Record it (the primary key blocks double credit)
+        const saved = await pool.query(
+            `
+            INSERT INTO deposits (order_id, user_id, method, amount)
+            VALUES ($1, $2, 'binance', $3)
+            ON CONFLICT (order_id) DO NOTHING
+            RETURNING order_id
+            `,
+            [order, id, rawAmount]
+        );
+
+        if (saved.rowCount === 0) {
+            return res.json({
+                ok: false,
+                status: "used"
+            });
+        }
+
+        await notifyAdminDeposit(id, order, amount);
+
+        return res.json({
+            ok: true,
+            status: "credited",
+            amount
+        });
+
+    } catch (error) {
+        console.error("DEPOSIT ERROR:", error.message);
+
+        return res.status(500).json({
+            ok: false,
+            status: "error"
+        });
+    }
+});
+
+// ==========================================
 // ADMIN API FOR TELEBOT CREATOR (/ban, /unban)
 // ==========================================
 // GET /api/admin?action=ban|unban&admin=CALLER_ID&target=USER_ID&reason=...
@@ -1326,4 +1735,4 @@ if (require.main === module) {
     app.listen(port, () => {
         console.log(`Backend running on port ${port}`);
     });
-                   }
+    }
