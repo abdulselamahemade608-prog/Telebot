@@ -274,7 +274,8 @@ async function sendVerifiedMessage(telegramId, firstName) {
     try {
         await sendTelegramMessage(
             telegramId,
-            "✅ <b>Successfully verified!</b>\n\n" +
+            
+            "<tg-emoji emoji-id='{5791863789221581366}'>⭐</tg-emoji> " <b>Successfully verified!</b>\n\n" +
             `Welcome, <b>${escapeHtml(firstName)}</b>. ` +
             "Your account has been verified.\n\n" +
             "Press the button below to continue.",
@@ -285,6 +286,7 @@ async function sendVerifiedMessage(telegramId, firstName) {
                             {
                                 text: "Continue",
                                 style: "success",
+                                icon_custom_emoji_id: "5791863789221581366",
                                 callback_data: "verified_ok"
                             }
                         ]
