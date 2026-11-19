@@ -284,6 +284,7 @@ async function sendVerifiedMessage(telegramId, firstName) {
                         [
                             {
                                 text: "Continue",
+                                style: "success",
                                 callback_data: "verified_ok"
                             }
                         ]
