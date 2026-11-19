@@ -207,22 +207,6 @@ async function sendTelegramMessage(chatId, text, extra = {}) {
     });
 }
 
-// Bot username (needed for the t.me/BOT?start=verify button)
-let cachedBotUsername = null;
-
-async function getBotUsername() {
-    if (process.env.BOT_USERNAME) {
-        return process.env.BOT_USERNAME.replace("@", "");
-    }
-
-    if (!cachedBotUsername) {
-        const me = await telegram("getMe");
-        cachedBotUsername = me.username;
-    }
-
-    return cachedBotUsername;
-}
-
 // ==========================================
 // BOT MESSAGES TO USERS
 // ==========================================
@@ -288,8 +272,6 @@ async function sendVerifiedMessage(telegramId, firstName) {
     }
 
     try {
-        const botUsername = await getBotUsername();
-
         await sendTelegramMessage(
             telegramId,
             "✅ <b>Successfully verified!</b>\n\n" +
@@ -302,7 +284,7 @@ async function sendVerifiedMessage(telegramId, firstName) {
                         [
                             {
                                 text: "Continue",
-                                url: `https://t.me/${botUsername}?start=verify`
+                                callback_data: "verified_ok"
                             }
                         ]
                     ]
@@ -988,4 +970,4 @@ if (require.main === module) {
     app.listen(port, () => {
         console.log(`Backend running on port ${port}`);
     });
-        }
+              }
