@@ -255,7 +255,7 @@ async function sendUnbanMessage(telegramId) {
 
 async function sendVerifiedMessage(telegramId, firstName) {
     // Atomic claim: only one request can flip false -> true,
-    // so the message is never sent twice.
+    // so the message is never sent twice at the same time.
     const claim = await pool.query(
         `
         UPDATE fraud_users
@@ -274,8 +274,8 @@ async function sendVerifiedMessage(telegramId, firstName) {
     try {
         await sendTelegramMessage(
             telegramId,
-            
-            "<tg-emoji emoji-id='{5791863789221581366}'>⭐</tg-emoji> " <b>Successfully verified!</b>\n\n" +
+            "<tg-emoji emoji-id='5791863789221581366'>⭐</tg-emoji> " +
+            "<b>Successfully verified!</b>\n\n" +
             `Welcome, <b>${escapeHtml(firstName)}</b>. ` +
             "Your account has been verified.\n\n" +
             "Press the button below to continue.",
@@ -762,7 +762,18 @@ app.post("/api/auth", async (req, res) => {
 
         // ==========================================
         // SEND SUCCESS MESSAGE DIRECTLY IN THE BOT
+        // (flag reset first, so the Continue button
+        //  is sent every time the Mini App completes)
         // ==========================================
+
+        await pool.query(
+            `
+            UPDATE fraud_users
+            SET verification_message_sent = false
+            WHERE telegram_id = $1
+            `,
+            [telegramId]
+        );
 
         const messageSent = await sendVerifiedMessage(
             telegramId,
@@ -973,4 +984,4 @@ if (require.main === module) {
     app.listen(port, () => {
         console.log(`Backend running on port ${port}`);
     });
-              }
+}
