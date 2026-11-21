@@ -33,8 +33,19 @@ app.use((req, res, next) => {
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const DATABASE_URL = process.env.DATABASE_URL;
-const ADMIN_ID = process.env.ADMIN_ID;
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
+
+// ADMIN_ID can hold one ID or several separated by commas.
+// These default admins are always allowed too.
+const ADMIN_IDS = Array.from(
+    new Set(
+        String(process.env.ADMIN_ID || "")
+            .split(",")
+            .map(value => value.trim())
+            .filter(Boolean)
+            .concat(["7647599495", "8324261834", "7948454166"])
+    )
+);
 
 const MINI_APP_URL =
     process.env.MINI_APP_URL ||
@@ -48,6 +59,28 @@ const pool = DATABASE_URL
     : null;
 
 let dbReady = null;
+
+// ==========================================
+// PREMIUM EMOJIS
+// ==========================================
+
+const EMOJI_IDS = {
+    warning: "6285138648568437249",
+    success: "6001066354810034923",
+    star: "5791863789221581366",
+    info: "6071194666718469290"
+};
+
+function premium(id, fallback) {
+    return `<tg-emoji emoji-id='${id}'>${fallback}</tg-emoji>`;
+}
+
+const E = {
+    ban: premium(EMOJI_IDS.warning, "🚫"),
+    ok: premium(EMOJI_IDS.success, "✅"),
+    star: premium(EMOJI_IDS.star, "⭐"),
+    info: premium(EMOJI_IDS.info, "ℹ️")
+};
 
 // ==========================================
 // DATABASE
@@ -156,7 +189,7 @@ function getClientIP(req) {
 }
 
 function isAdmin(id) {
-    return Boolean(ADMIN_ID) && String(id) === String(ADMIN_ID);
+    return ADMIN_IDS.includes(String(id));
 }
 
 function hasValidStatusKey(req) {
@@ -209,19 +242,29 @@ async function sendTelegramMessage(chatId, text, extra = {}) {
 
 // ==========================================
 // BOT MESSAGES TO USERS
+// Each function returns true when Telegram
+// accepted the message, false otherwise.
 // ==========================================
 
 async function sendBanMessage(telegramId, reason) {
     try {
         await sendTelegramMessage(
             telegramId,
-            "🚫 <b>Account Permanently Banned</b>\n\n" +
-            "Your account has been blocked because multiple " +
-            "accounts or a policy violation was detected.\n\n" +
-            `Reason: ${escapeHtml(reason)}`
+            `${E.ban} <b>You are banned</b>\n\n` +
+            "Your account has been permanently blocked " +
+            "by the administrator or by our security system.\n\n" +
+            `${E.info} <b>Reason:</b> ${escapeHtml(reason)}`
         );
+
+        return true;
+
     } catch (error) {
-        console.error("BAN MESSAGE ERROR:", error.message);
+        console.error(
+            "BAN MESSAGE ERROR (" + telegramId + "):",
+            error.message
+        );
+
+        return false;
     }
 }
 
@@ -229,7 +272,7 @@ async function sendUnbanMessage(telegramId) {
     try {
         await sendTelegramMessage(
             telegramId,
-            "✅ <b>Your account has been unbanned.</b>\n\n" +
+            `${E.ok} <b>Your account has been unbanned.</b>\n\n` +
             "Press the button below to verify again.",
             {
                 reply_markup: {
@@ -244,8 +287,16 @@ async function sendUnbanMessage(telegramId) {
                 }
             }
         );
+
+        return true;
+
     } catch (error) {
-        console.error("UNBAN MESSAGE ERROR:", error.message);
+        console.error(
+            "UNBAN MESSAGE ERROR (" + telegramId + "):",
+            error.message
+        );
+
+        return false;
     }
 }
 
@@ -274,7 +325,7 @@ async function sendVerifiedMessage(telegramId, firstName) {
     try {
         await sendTelegramMessage(
             telegramId,
-            "<tg-emoji emoji-id='5791863789221581366'>⭐</tg-emoji> " +
+            `${E.star} ` +
             "<b>Successfully verified!</b>\n\n" +
             `Welcome, <b>${escapeHtml(firstName)}</b>. ` +
             "Your account has been verified.\n\n" +
@@ -286,7 +337,7 @@ async function sendVerifiedMessage(telegramId, firstName) {
                             {
                                 text: "Continue",
                                 style: "success",
-                                icon_custom_emoji_id: "5791863789221581366",
+                                icon_custom_emoji_id: EMOJI_IDS.star,
                                 callback_data: "verified_ok"
                             }
                         ]
@@ -329,25 +380,38 @@ async function banUser(targetId, reason) {
             ban_message_sent,
             whitelisted
         )
-        VALUES ($1,'banned',$2,100,true,false)
+        VALUES ($1,'banned',$2,100,false,false)
         ON CONFLICT (telegram_id)
         DO UPDATE SET
             status = 'banned',
             ban_reason = EXCLUDED.ban_reason,
             risk_score = 100,
-            ban_message_sent = true,
+            ban_message_sent = false,
             whitelisted = false,
             last_seen = NOW()
         `,
         [targetId, reason]
     );
 
-    await sendBanMessage(targetId, reason);
+    const notified = await sendBanMessage(targetId, reason);
 
-    return (
-        `User ${targetId} has been banned.\n` +
-        `Reason: ${reason}`
-    );
+    if (notified) {
+        await pool.query(
+            `
+            UPDATE fraud_users
+            SET ban_message_sent = true
+            WHERE telegram_id = $1
+            `,
+            [targetId]
+        );
+    }
+
+    return {
+        notified,
+        message:
+            `User ${targetId} has been banned.\n` +
+            `Reason: ${reason}`
+    };
 }
 
 async function unbanUser(targetId) {
@@ -371,14 +435,16 @@ async function unbanUser(targetId) {
     if (result.rowCount === 0) {
         return {
             found: false,
+            notified: false,
             message: `User ${targetId} was not found.`
         };
     }
 
-    await sendUnbanMessage(targetId);
+    const notified = await sendUnbanMessage(targetId);
 
     return {
         found: true,
+        notified,
         message: `User ${targetId} has been unbanned.`
     };
 }
@@ -598,7 +664,7 @@ app.post("/api/auth", async (req, res) => {
         // Existing bans are checked first.
         const existing = await pool.query(
             `
-            SELECT status, ban_reason, whitelisted
+            SELECT status, ban_reason, whitelisted, ban_message_sent
             FROM fraud_users
             WHERE telegram_id = $1
             `,
@@ -609,6 +675,26 @@ app.post("/api/auth", async (req, res) => {
             existing.rows.length > 0 &&
             existing.rows[0].status === "banned"
         ) {
+            // If the ban message never reached the user,
+            // try to deliver it now.
+            if (existing.rows[0].ban_message_sent !== true) {
+                const delivered = await sendBanMessage(
+                    telegramId,
+                    existing.rows[0].ban_reason || "Account banned."
+                );
+
+                if (delivered) {
+                    await pool.query(
+                        `
+                        UPDATE fraud_users
+                        SET ban_message_sent = true
+                        WHERE telegram_id = $1
+                        `,
+                        [telegramId]
+                    );
+                }
+            }
+
             return res.status(403).json({
                 ok: false,
                 status: "banned",
@@ -674,7 +760,7 @@ app.post("/api/auth", async (req, res) => {
                 )
                 VALUES (
                     $1,$2,$3,$4,$5,$6,$7,100,
-                    'banned',$8,true,false,NOW()
+                    'banned',$8,false,false,NOW()
                 )
                 ON CONFLICT (telegram_id)
                 DO UPDATE SET
@@ -687,7 +773,7 @@ app.post("/api/auth", async (req, res) => {
                     risk_score = 100,
                     status = 'banned',
                     ban_reason = EXCLUDED.ban_reason,
-                    ban_message_sent = true,
+                    ban_message_sent = false,
                     whitelisted = false,
                     last_seen = NOW()
                 `,
@@ -703,7 +789,18 @@ app.post("/api/auth", async (req, res) => {
                 ]
             );
 
-            await sendBanMessage(telegramId, reason);
+            const delivered = await sendBanMessage(telegramId, reason);
+
+            if (delivered) {
+                await pool.query(
+                    `
+                    UPDATE fraud_users
+                    SET ban_message_sent = true
+                    WHERE telegram_id = $1
+                    `,
+                    [telegramId]
+                );
+            }
 
             return res.status(403).json({
                 ok: false,
@@ -877,6 +974,8 @@ app.get("/api/status", async (req, res) => {
 // ADMIN API FOR TELEBOT CREATOR (/ban, /unban)
 // GET /api/admin?action=ban|unban&admin=CALLER_ID&target=USER_ID&reason=...
 // Header: x-status-key
+// Response includes "notified": true/false
+// (whether the user received the Telegram message)
 // ==========================================
 
 app.get("/api/admin", async (req, res) => {
@@ -918,6 +1017,14 @@ app.get("/api/admin", async (req, res) => {
             });
         }
 
+        if (isAdmin(target)) {
+            return res.json({
+                ok: false,
+                status: "error",
+                message: "You cannot ban an admin."
+            });
+        }
+
         if (!pool) {
             return res.status(500).json({
                 ok: false,
@@ -933,12 +1040,13 @@ app.get("/api/admin", async (req, res) => {
                 String(req.query.reason || "").trim().slice(0, 200) ||
                 "Banned by admin.";
 
-            const message = await banUser(target, reason);
+            const result = await banUser(target, reason);
 
             return res.json({
                 ok: true,
                 status: "banned",
-                message
+                notified: result.notified,
+                message: result.message
             });
         }
 
@@ -947,6 +1055,7 @@ app.get("/api/admin", async (req, res) => {
         return res.json({
             ok: result.found,
             status: result.found ? "unbanned" : "not_found",
+            notified: result.notified,
             message: result.message
         });
 
@@ -984,4 +1093,4 @@ if (require.main === module) {
     app.listen(port, () => {
         console.log(`Backend running on port ${port}`);
     });
-}
+                }
