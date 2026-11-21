@@ -1,1543 +1,494 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#d9e3e8">
-<title>Account Verification</title>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-
-<style>
-* {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-    -webkit-tap-highlight-color: transparent;
-}
-
-[hidden] {
-    display: none !important;
-}
-
-:root {
-    --page: #d9e3e8;
-    --paper: #fbfcfd;
-    --tint: #eef3f6;
-    --ink: #10222c;
-    --soft: #4d6270;
-    --line: #c3d0d8;
-    --accent: #0d6f8f;
-    --accent-2: #3fb0d4;
-    --ok: #1b8a57;
-    --bad: #c53b36;
-    --warn: #c98300;
-    --b1: #8fd3ea;
-    --b2: #cdb6ff;
-    --b3: #9fe8c3;
-    --shadow: 0 24px 50px -22px rgba(16,34,44,.45);
-}
-
-:root[data-theme="dark"] {
-    --page: #0b151b;
-    --paper: #15242d;
-    --tint: #1c303b;
-    --ink: #eaf1f4;
-    --soft: #97aab5;
-    --line: #2a3d48;
-    --accent: #4cb8d9;
-    --accent-2: #2a86a8;
-    --ok: #4fd08f;
-    --bad: #ff7a73;
-    --warn: #f0b440;
-    --b1: #1d6f8c;
-    --b2: #5a3fa8;
-    --b3: #1b7a55;
-    --shadow: 0 24px 50px -22px rgba(0,0,0,.8);
-}
-
-html, body {
-    min-height: 100%;
-}
-
-body {
-    min-height: 100dvh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: max(20px, env(safe-area-inset-top))
-             20px
-             max(20px, env(safe-area-inset-bottom));
-    background: var(--page);
-    color: var(--ink);
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto,
-                 Arial, sans-serif;
-    overflow-x: hidden;
-}
-
-/* ---------- Background ---------- */
-
-.bg {
-    position: fixed;
-    inset: 0;
-    z-index: 0;
-    overflow: hidden;
-    pointer-events: none;
-}
-
-.blob {
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(60px);
-    opacity: .6;
-    animation: drift 18s ease-in-out infinite;
-}
-
-.b1 {
-    top: -80px;
-    left: -60px;
-    width: 280px;
-    height: 280px;
-    background: var(--b1);
-}
-
-.b2 {
-    right: -90px;
-    bottom: 8%;
-    width: 300px;
-    height: 300px;
-    background: var(--b2);
-    animation-delay: -6s;
-}
-
-.b3 {
-    bottom: -100px;
-    left: 18%;
-    width: 240px;
-    height: 240px;
-    background: var(--b3);
-    animation-delay: -12s;
-}
-
-#confetti {
-    position: fixed;
-    inset: 0;
-    z-index: 50;
-    display: none;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-}
-
-/* ---------- Premium emoji ---------- */
-
-.pe {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.25em;
-    height: 1.25em;
-    vertical-align: -.25em;
-    line-height: 1;
-}
-
-.pe-media {
-    display: block;
-    width: 100%;
-    height: 100%;
-}
-
-.pe-media svg,
-.pe-media video,
-.pe-media img {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-}
-
-/* ---------- Card ---------- */
-
-.pass {
-    position: relative;
-    z-index: 1;
-    width: 100%;
-    max-width: 390px;
-    overflow: hidden;
-    border: 1px solid var(--line);
-    border-radius: 28px;
-    background: var(--paper);
-    box-shadow: var(--shadow);
-    animation: rise .6s cubic-bezier(.2,.9,.3,1) both;
-}
-
-.pass-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 17px 22px;
-    border-bottom: 1px solid var(--line);
-    background: linear-gradient(180deg, var(--tint), transparent);
-    color: var(--soft);
-    font-size: 13px;
-}
-
-.pass-top strong {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    color: var(--ink);
-    font-size: 14px;
-    font-weight: 750;
-    letter-spacing: .2px;
-}
-
-.dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: var(--accent);
-    box-shadow: 0 0 0 4px rgba(13,111,143,.18);
-    transition: background .3s;
-}
-
-.pass-body {
-    padding: 30px 24px 28px;
-    text-align: center;
-}
-
-/* ---------- Stamp ---------- */
-
-.stamp {
-    --stamp: var(--accent);
-    --glow: rgba(13,111,143,.28);
-    position: relative;
-    width: 132px;
-    height: 132px;
-    margin: 0 auto 26px;
-    color: var(--stamp);
-}
-
-.stamp::before {
-    position: absolute;
-    inset: -16px;
-    border-radius: 50%;
-    background: radial-gradient(circle, var(--glow), transparent 68%);
-    content: "";
-    animation: pulse 2.6s ease-in-out infinite;
-}
-
-.stamp[data-state="success"] {
-    --stamp: var(--ok);
-    --glow: rgba(27,138,87,.3);
-}
-
-.stamp[data-state="banned"],
-.stamp[data-state="error"] {
-    --stamp: var(--bad);
-    --glow: rgba(197,59,54,.3);
-}
-
-.stamp[data-state="warning"] {
-    --stamp: var(--warn);
-    --glow: rgba(201,131,0,.3);
-}
-
-.stamp.pop {
-    animation: pop .55s cubic-bezier(.3,1.6,.5,1);
-}
-
-.frame {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-}
-
-.outer {
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 3;
-}
-
-.inner {
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.4;
-    opacity: .5;
-}
-
-.tick {
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.4;
-    opacity: .4;
-}
-
-.stamp[data-state="loading"] .outer {
-    stroke-dasharray: 4 9;
-    stroke-linecap: round;
-    transform-origin: 66px 66px;
-    animation: spin 6s linear infinite;
-}
-
-.glyph {
-    position: absolute;
-    inset: 0;
-    display: none;
-    align-items: center;
-    justify-content: center;
-}
-
-.glyph .pe {
-    width: 68px;
-    height: 68px;
-    font-size: 58px;
-    animation: floaty 2.8s ease-in-out infinite;
-}
-
-.stamp[data-state="loading"] .g-load,
-.stamp[data-state="success"] .g-ok,
-.stamp[data-state="banned"] .g-ban,
-.stamp[data-state="warning"] .g-warn,
-.stamp[data-state="error"] .g-err {
-    display: flex;
-}
-
-.stamp[data-state="banned"] .glyph .pe {
-    animation: wobble .9s ease-in-out infinite;
-}
-
-/* ---------- Text ---------- */
-
-h1 {
-    margin-bottom: 10px;
-    font-size: 25px;
-    line-height: 1.2;
-    font-weight: 800;
-    letter-spacing: -.3px;
-    text-wrap: balance;
-    overflow-wrap: anywhere;
-}
-
-.msg {
-    max-width: 32ch;
-    min-height: 44px;
-    margin: 0 auto;
-    color: var(--soft);
-    font-size: 14px;
-    line-height: 1.7;
-    overflow-wrap: anywhere;
-}
-
-.chip {
-    display: inline-block;
-    max-width: 100%;
-    margin-top: 16px;
-    padding: 8px 14px;
-    border: 1px dashed var(--line);
-    border-radius: 999px;
-    background: var(--tint);
-    color: var(--ink);
-    font-size: 12.5px;
-    line-height: 1.5;
-    transition: opacity .25s;
-}
-
-/* ---------- Ban question (runaway button) ---------- */
-
-.ask {
-    margin-top: 22px;
-    padding: 16px 14px 14px;
-    border: 1px solid var(--line);
-    border-radius: 18px;
-    background: var(--tint);
-}
-
-.ask-q {
-    font-size: 16px;
-    font-weight: 800;
-}
-
-.arena {
-    position: relative;
-    height: 128px;
-    margin-top: 10px;
-}
-
-.choice {
-    position: absolute;
-    top: 38px;
-    min-width: 116px;
-    height: 52px;
-    padding: 0 20px;
-    border: 0;
-    border-radius: 15px;
-    font: inherit;
-    font-size: 16px;
-    font-weight: 800;
-    cursor: pointer;
-    touch-action: manipulation;
-    transition: left .32s cubic-bezier(.34,1.56,.64,1),
-                top .32s cubic-bezier(.34,1.56,.64,1);
-}
-
-.choice.yes {
-    left: 0;
-    background: linear-gradient(135deg, #1b8a57, #3fcf8e);
-    color: #fff;
-    box-shadow: 0 10px 20px -10px rgba(27,138,87,.8);
-}
-
-.choice.yes.caught {
-    animation: glow 1.1s ease-in-out infinite;
-}
-
-.choice.yes:disabled {
-    opacity: .6;
-    cursor: default;
-    animation: none;
-}
-
-.choice.no {
-    right: 0;
-    border: 1.5px solid var(--bad);
-    background: transparent;
-    color: var(--bad);
-}
-
-.choice.hop {
-    animation: hop .45s ease-out;
-}
-
-.taunt {
-    min-height: 20px;
-    color: var(--soft);
-    font-size: 12.5px;
-    line-height: 1.6;
-}
-
-/* ---------- Buttons ---------- */
-
-.btn {
-    display: none;
-    width: 100%;
-    min-height: 52px;
-    align-items: center;
-    justify-content: center;
-    gap: 9px;
-    margin-top: 24px;
-    padding: 14px 16px;
-    border-radius: 15px;
-    font: inherit;
-    font-size: 15px;
-    font-weight: 750;
-    cursor: pointer;
-}
-
-.btn svg {
-    width: 19px;
-    height: 19px;
-    flex-shrink: 0;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 2.2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-}
-
-.btn:active {
-    transform: scale(.98);
-}
-
-.btn:focus-visible,
-.choice:focus-visible {
-    outline: 3px solid var(--accent);
-    outline-offset: 3px;
-}
-
-.btn.ok {
-    border: 0;
-    background: linear-gradient(135deg, var(--accent), var(--accent-2));
-    color: #fff;
-    box-shadow: 0 12px 24px -12px var(--accent);
-}
-
-.btn.retry {
-    border: 1.5px solid var(--line);
-    background: transparent;
-    color: var(--ink);
-}
-
-/* ---------- Footer ---------- */
-
-.tear {
-    height: 0;
-    margin: 0 20px;
-    border-top: 2px dashed var(--line);
-}
-
-.pass-foot {
-    padding: 17px 22px 20px;
-    color: var(--soft);
-    text-align: center;
-    font-size: 12px;
-    line-height: 1.7;
-}
-
-/* ---------- Animations ---------- */
-
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-
-@keyframes rise {
-    from { opacity: 0; transform: translateY(18px) scale(.97); }
-    to { opacity: 1; transform: none; }
-}
-
-@keyframes pop {
-    0% { transform: scale(.7); }
-    100% { transform: scale(1); }
-}
-
-@keyframes pulse {
-    0%, 100% { opacity: .65; transform: scale(.96); }
-    50% { opacity: 1; transform: scale(1.04); }
-}
-
-@keyframes floaty {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-5px); }
-}
-
-@keyframes wobble {
-    0%, 100% { transform: rotate(0); }
-    25% { transform: rotate(-9deg); }
-    75% { transform: rotate(9deg); }
-}
-
-@keyframes drift {
-    0%, 100% { transform: translate(0, 0) scale(1); }
-    50% { transform: translate(34px, 24px) scale(1.12); }
-}
-
-@keyframes hop {
-    0% { transform: translateY(0) rotate(0) scale(1); }
-    35% { transform: translateY(-30px) rotate(-10deg) scale(1.12); }
-    70% { transform: translateY(4px) rotate(6deg) scale(.96); }
-    100% { transform: translateY(0) rotate(0) scale(1); }
-}
-
-@keyframes glow {
-    0%, 100% {
-        transform: scale(1);
-        box-shadow: 0 10px 20px -10px rgba(27,138,87,.8);
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#07130f">
+  <title>Account Verification</title>
+
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
     }
-    50% {
-        transform: scale(1.07);
-        box-shadow: 0 0 0 7px rgba(63,207,142,.22),
-                    0 10px 24px -8px rgba(27,138,87,.9);
-    }
-}
 
-@media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
-        animation-duration: .01ms !important;
-        animation-iteration-count: 1 !important;
-        scroll-behavior: auto !important;
+    :root {
+      --bg: #07130f;
+      --card: #10231b;
+      --green: #20d890;
+      --green-light: #75ffc0;
+      --text: #f3fff9;
+      --muted: #9bb8aa;
     }
-}
-</style>
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 22px;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 20%, #174c36 0%, transparent 42%),
+        var(--bg);
+      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    .background-glow {
+      position: fixed;
+      width: 280px;
+      height: 280px;
+      border-radius: 50%;
+      background: var(--green);
+      filter: blur(130px);
+      opacity: .13;
+      animation: glow 5s ease-in-out infinite alternate;
+      pointer-events: none;
+    }
+
+    @keyframes glow {
+      from { transform: scale(.8); opacity: .08; }
+      to { transform: scale(1.3); opacity: .2; }
+    }
+
+    .container {
+      width: 100%;
+      max-width: 410px;
+      position: relative;
+      z-index: 2;
+      text-align: center;
+    }
+
+    .card {
+      padding: 36px 25px;
+      border: 1px solid rgba(117, 255, 192, .13);
+      border-radius: 26px;
+      background: rgba(16, 35, 27, .92);
+      box-shadow: 0 20px 70px rgba(0, 0, 0, .35);
+      backdrop-filter: blur(15px);
+      animation: cardIn .7s cubic-bezier(.2, .8, .2, 1) both;
+    }
+
+    @keyframes cardIn {
+      from {
+        opacity: 0;
+        transform: translateY(25px) scale(.96);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .logo {
+      width: 92px;
+      height: 92px;
+      margin: 0 auto 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: linear-gradient(145deg, #1c9d69, #0b573c);
+      box-shadow: 0 0 35px rgba(32, 216, 144, .22);
+      animation: float 3s ease-in-out infinite;
+    }
+
+    .logo svg {
+      width: 46px;
+      height: 46px;
+      stroke: white;
+      stroke-width: 2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-8px); }
+    }
+
+    h1 {
+      font-size: 25px;
+      margin-bottom: 12px;
+      letter-spacing: -.5px;
+    }
+
+    .description {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.7;
+      margin-bottom: 27px;
+    }
+
+    .status {
+      min-height: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 14px;
+      border-radius: 15px;
+      background: rgba(255, 255, 255, .045);
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .spinner {
+      width: 19px;
+      height: 19px;
+      border: 2px solid rgba(255, 255, 255, .18);
+      border-top-color: var(--green);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .success-icon {
+      width: 23px;
+      height: 23px;
+      color: var(--green-light);
+      animation: pop .45s cubic-bezier(.2, 1.6, .5, 1) both;
+    }
+
+    @keyframes pop {
+      from { transform: scale(0); }
+      to { transform: scale(1); }
+    }
+
+    .status.success {
+      color: var(--green-light);
+      background: rgba(32, 216, 144, .09);
+      border: 1px solid rgba(32, 216, 144, .18);
+    }
+
+    .status.error {
+      color: #ff9b9b;
+      background: rgba(255, 70, 70, .07);
+      border: 1px solid rgba(255, 70, 70, .15);
+    }
+
+    .user-info {
+      display: none;
+      margin-top: 20px;
+      padding: 17px;
+      border-radius: 15px;
+      background: rgba(255, 255, 255, .04);
+      text-align: left;
+      animation: cardIn .5s ease both;
+    }
+
+    .user-info.show {
+      display: block;
+    }
+
+    .user-label {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 7px;
+    }
+
+    .user-name {
+      font-size: 17px;
+      font-weight: bold;
+      overflow-wrap: anywhere;
+    }
+
+    .user-id {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 6px;
+    }
+
+    .footer {
+      color: #668577;
+      font-size: 11px;
+      margin-top: 23px;
+    }
+
+    .retry {
+      display: none;
+      margin-top: 17px;
+      padding: 12px 22px;
+      border: none;
+      border-radius: 12px;
+      background: var(--green);
+      color: #062116;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .retry.show {
+      display: inline-block;
+    }
+
+    .particles {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .particle {
+      position: absolute;
+      bottom: -20px;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--green-light);
+      opacity: 0;
+      animation: rise 7s linear infinite;
+    }
+
+    @keyframes rise {
+      0% {
+        transform: translateY(0) scale(.5);
+        opacity: 0;
+      }
+      15% { opacity: .6; }
+      85% { opacity: .3; }
+      100% {
+        transform: translateY(-110vh) scale(1.5);
+        opacity: 0;
+      }
+    }
+  </style>
 </head>
 
 <body>
+  <div class="background-glow"></div>
+  <div class="particles" id="particles"></div>
 
-<div class="bg" aria-hidden="true">
-    <i class="blob b1"></i>
-    <i class="blob b2"></i>
-    <i class="blob b3"></i>
-</div>
+  <main class="container">
+    <section class="card">
 
-<canvas id="confetti" aria-hidden="true"></canvas>
+      <div class="logo">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 3L4 7v5c0 5 3.5 8 8 9 4.5-1 8-4 8-9V7l-8-4z"/>
+          <path d="m8.5 12 2.3 2.3 4.7-5"/>
+        </svg>
+      </div>
 
-<main class="pass">
+      <h1 id="title">Welcome</h1>
 
-    <header class="pass-top">
-        <strong>
-            <span class="pe" data-id="5397782960512444700">⭐</span>
-            Account Verification
-        </strong>
-        <span class="dot" id="dot"></span>
-    </header>
+      <p class="description" id="description">
+        Please wait while we securely verify your Telegram account.
+      </p>
 
-    <section class="pass-body">
+      <div class="status" id="status">
+        <span class="spinner"></span>
+        <span id="statusText">Connecting to server...</span>
+      </div>
 
-        <div class="stamp" id="stamp" data-state="loading"
-             role="img" aria-label="Verification status">
+      <div class="user-info" id="userInfo">
+        <div class="user-label">Verified Telegram Account</div>
+        <div class="user-name" id="userName">User</div>
+        <div class="user-id" id="userId"></div>
+      </div>
 
-            <svg class="frame" viewBox="0 0 132 132" aria-hidden="true">
-                <circle class="outer" cx="66" cy="66" r="62"/>
-                <circle class="inner" cx="66" cy="66" r="52"/>
-                <circle class="tick" cx="66" cy="66" r="57"
-                        stroke-dasharray="1 7"/>
-            </svg>
+      <button class="retry" id="retryButton" onclick="authenticate()">
+        Try Again
+      </button>
 
-            <div class="glyph g-load" aria-hidden="true">
-                <span class="pe" data-id="5458603043203327669">🔍</span>
-            </div>
-
-            <div class="glyph g-ok" aria-hidden="true">
-                <span class="pe" data-id="5791863789221581366">✅</span>
-            </div>
-
-            <div class="glyph g-ban" aria-hidden="true">
-                <span class="pe" data-id="6285138648568437249">🚫</span>
-            </div>
-
-            <div class="glyph g-warn" aria-hidden="true">
-                <span class="pe" data-id="6071194666718469290">⚠️</span>
-            </div>
-
-            <div class="glyph g-err" aria-hidden="true">
-                <span class="pe" data-id="6285138648568437249">❌</span>
-            </div>
-        </div>
-
-        <h1 id="title">Checking your account</h1>
-
-        <p class="msg" id="message" aria-live="polite">
-            Please wait while we securely check your account.
-        </p>
-
-        <p class="chip" id="joke"></p>
-
-        <div class="ask" id="ask" hidden>
-            <p class="ask-q" id="askQ">Want to be unbanned?</p>
-
-            <div class="arena" id="arena">
-                <button class="choice yes" id="yesBtn" type="button">Yes</button>
-                <button class="choice no" id="noBtn" type="button">No</button>
-            </div>
-
-            <p class="taunt" id="taunt" aria-live="polite"></p>
-        </div>
-
-        <button class="btn ok" id="doneBtn" type="button">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M5.5 12.8l4.2 4.2L18.5 7.5"/>
-            </svg>
-            Close
-        </button>
-
-        <button class="btn retry" id="retryBtn" type="button">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M20 11a8 8 0 10-2.3 6.1"/>
-                <path d="M20 4v7h-7"/>
-            </svg>
-            Try again
-        </button>
+      <div class="footer">
+        Secure Telegram Mini App
+      </div>
 
     </section>
+  </main>
 
-    <div class="tear"></div>
+  <script>
+    // ==========================================
+    // CONFIGURATION
+    // ==========================================
 
-    <footer class="pass-foot">
-        <span class="pe" data-id="6071194666718469290">ℹ️</span>
-        Secure account verification. If you believe a ban is a mistake,
-        contact the administrator.
-    </footer>
+    const API_URL = "https://mrabdubot.vercel.app";
 
-</main>
+    const tg = window.Telegram?.WebApp;
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+    // ==========================================
+    // TELEGRAM INITIALIZATION
+    // ==========================================
 
-<script>
-"use strict";
+    if (tg) {
+      tg.ready();
+      tg.expand();
 
-// ==========================================
-// TELEGRAM WEB APP
-// ==========================================
-
-const tg = window.Telegram?.WebApp || null;
-
-if (tg) {
-    try {
-        tg.ready();
-        tg.expand();
-    } catch (error) {
-        console.warn("Telegram WebApp initialization failed.");
+      try {
+        tg.setHeaderColor("#07130f");
+        tg.setBackgroundColor("#07130f");
+      } catch (error) {
+        console.log("Theme setup skipped.");
+      }
     }
-}
 
-function haptic(type) {
-    try {
-        if (!tg || !tg.HapticFeedback) return;
+    // ==========================================
+    // PARTICLE ANIMATION
+    // ==========================================
 
-        if (type === "success" || type === "error") {
-            tg.HapticFeedback.notificationOccurred(type);
+    const particles = document.getElementById("particles");
+
+    for (let i = 0; i < 22; i++) {
+      const particle = document.createElement("div");
+
+      particle.className = "particle";
+      particle.style.left = Math.random() * 100 + "%";
+      particle.style.animationDelay = Math.random() * 7 + "s";
+      particle.style.animationDuration = (5 + Math.random() * 6) + "s";
+
+      particles.appendChild(particle);
+    }
+
+    // ==========================================
+    // DEVICE ID
+    // ==========================================
+
+    function getDeviceId() {
+      let deviceId = localStorage.getItem("mini_device_id");
+
+      if (!deviceId) {
+        if (window.crypto && crypto.randomUUID) {
+          deviceId = crypto.randomUUID();
         } else {
-            tg.HapticFeedback.impactOccurred("light");
-        }
-    } catch (error) {}
-}
-
-// ==========================================
-// THEME
-// ==========================================
-
-function applyTheme() {
-    const dark = tg
-        ? tg.colorScheme === "dark"
-        : window.matchMedia &&
-          window.matchMedia("(prefers-color-scheme: dark)").matches;
-
-    document.documentElement.dataset.theme =
-        dark ? "dark" : "light";
-}
-
-applyTheme();
-
-if (tg && typeof tg.onEvent === "function") {
-    tg.onEvent("themeChanged", applyTheme);
-}
-
-// ==========================================
-// CONFIGURATION
-// ==========================================
-
-// Must match your deployed backend.
-const API_BASE = "https://mrabdubot.vercel.app";
-
-// How many times the "Yes" button escapes before
-// it lets the user catch it (then it really unbans).
-const DODGES_NEEDED = 5;
-
-const $ = id => document.getElementById(id);
-
-const reduceMotion =
-    window.matchMedia &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-// ==========================================
-// PREMIUM EMOJIS
-// The emoji files come from the backend
-// (/api/emoji/:id). If loading fails, the normal
-// emoji written inside the element stays visible.
-// ==========================================
-
-const EMOJI_CACHE = new Map();
-
-function fetchEmoji(id) {
-    if (EMOJI_CACHE.has(id)) {
-        return EMOJI_CACHE.get(id);
-    }
-
-    const promise = (async () => {
-        const response = await fetch(`${API_BASE}/api/emoji/${id}`);
-
-        if (!response.ok) {
-            throw new Error("Emoji not available.");
+          deviceId =
+            "device-" +
+            Date.now() +
+            "-" +
+            Math.random().toString(36).slice(2);
         }
 
-        const type = (
-            response.headers.get("content-type") || ""
-        ).toLowerCase();
+        localStorage.setItem("mini_device_id", deviceId);
+      }
 
-        if (type.includes("json")) {
-            return { kind: "lottie", text: await response.text() };
-        }
-
-        const blob = await response.blob();
-
-        return {
-            kind: type.includes("video") ? "video" : "image",
-            url: URL.createObjectURL(blob)
-        };
-    })();
-
-    EMOJI_CACHE.set(id, promise);
-
-    promise.catch(() => EMOJI_CACHE.delete(id));
-
-    return promise;
-}
-
-async function mountPremium(el) {
-    const id = el.dataset.id;
-
-    if (!id || el.dataset.mounted) return;
-
-    el.dataset.mounted = "1";
-
-    try {
-        const asset = await fetchEmoji(id);
-        const holder = document.createElement("span");
-
-        holder.className = "pe-media";
-
-        if (asset.kind === "lottie") {
-            if (!window.lottie) throw new Error("Lottie missing.");
-
-            el._anim = window.lottie.loadAnimation({
-                container: holder,
-                renderer: "svg",
-                loop: true,
-                autoplay: true,
-                animationData: JSON.parse(asset.text)
-            });
-
-        } else if (asset.kind === "video") {
-            const video = document.createElement("video");
-
-            video.src = asset.url;
-            video.muted = true;
-            video.loop = true;
-            video.autoplay = true;
-            video.playsInline = true;
-            video.setAttribute("playsinline", "");
-
-            // If the device cannot play it, keep the normal emoji.
-            video.addEventListener("error", () => {
-                holder.remove();
-                el.textContent = el.dataset.fallback || "";
-            });
-
-            el._video = video;
-            holder.appendChild(video);
-
-        } else {
-            const image = document.createElement("img");
-
-            image.src = asset.url;
-            image.alt = "";
-            holder.appendChild(image);
-        }
-
-        el.dataset.fallback = el.textContent;
-        el.textContent = "";
-        el.appendChild(holder);
-
-        syncAnimations();
-
-    } catch (error) {
-        // Keep the normal emoji.
-    }
-}
-
-// Only visible emojis animate (saves battery).
-function syncAnimations() {
-    document.querySelectorAll(".pe").forEach(el => {
-        const visible = el.offsetParent !== null;
-
-        if (el._anim) {
-            if (visible) el._anim.play();
-            else el._anim.pause();
-        }
-
-        if (el._video) {
-            if (visible) el._video.play().catch(() => {});
-            else el._video.pause();
-        }
-    });
-}
-
-document.querySelectorAll(".pe").forEach(mountPremium);
-
-// ==========================================
-// FUNNY TEXTS
-// ==========================================
-
-const LOADING_LINES = [
-    "Asking Telegram if you are a real human 🤔",
-    "Counting the hamsters that power our server 🐹",
-    "Looking for sneaky second accounts 🕵️",
-    "Polishing your verification badge ✨",
-    "Almost there... probably 😅"
-];
-
-const SUCCESS_LINES = [
-    "Certified human. Beep boop... wait, no beep 🤖",
-    "Your account is now shinier than a new coin 🪙",
-    "Plot twist: that was easy 😎"
-];
-
-const ERROR_LINES = [
-    "The hamsters tripped over a cable 🐹",
-    "Our server went to get coffee ☕",
-    "Even robots have bad days 🤖"
-];
-
-const WARNING_LINES = [
-    "Wrong door, friend 🚪",
-    "This page is shy outside Telegram 🙈"
-];
-
-const BANNED_LINES = [
-    "Plot twist nobody wanted 🎬",
-    "The ban hammer has spoken 🔨",
-    "Oof. That one hurts 😬"
-];
-
-function pick(list) {
-    return list[Math.floor(Math.random() * list.length)];
-}
-
-let loadingTimer = null;
-let loadingIndex = 0;
-
-function startLoadingLines() {
-    stopLoadingLines();
-
-    loadingIndex = 0;
-    $("joke").textContent = LOADING_LINES[0];
-
-    loadingTimer = setInterval(() => {
-        loadingIndex = (loadingIndex + 1) % LOADING_LINES.length;
-        $("joke").textContent = LOADING_LINES[loadingIndex];
-    }, 2200);
-}
-
-function stopLoadingLines() {
-    if (loadingTimer) {
-        clearInterval(loadingTimer);
-        loadingTimer = null;
-    }
-}
-
-// ==========================================
-// STATE
-// ==========================================
-
-const DOT_COLORS = {
-    loading: "var(--accent)",
-    success: "var(--ok)",
-    banned: "var(--bad)",
-    warning: "var(--warn)",
-    error: "var(--bad)"
-};
-
-function setState(state, title, message) {
-    const stamp = $("stamp");
-
-    stamp.dataset.state = state;
-
-    stamp.classList.remove("pop");
-    void stamp.offsetWidth;
-    stamp.classList.add("pop");
-
-    $("dot").style.background =
-        DOT_COLORS[state] || DOT_COLORS.loading;
-
-    $("title").textContent = title;
-    $("message").textContent = message;
-
-    $("doneBtn").style.display =
-        state === "success" ? "flex" : "none";
-
-    $("retryBtn").style.display =
-        state === "error" || state === "warning"
-            ? "flex"
-            : "none";
-
-    if (state === "loading") {
-        startLoadingLines();
-    } else {
-        stopLoadingLines();
-
-        const pool = {
-            success: SUCCESS_LINES,
-            error: ERROR_LINES,
-            warning: WARNING_LINES,
-            banned: BANNED_LINES
-        }[state];
-
-        $("joke").textContent = pool ? pick(pool) : "";
+      return deviceId;
     }
 
-    if (state === "banned") {
-        resetAsk();
-        $("ask").hidden = false;
-    } else {
-        $("ask").hidden = true;
+    // ==========================================
+    // UI HELPERS
+    // ==========================================
+
+    function setLoading(message) {
+      const status = document.getElementById("status");
+
+      status.className = "status";
+      status.innerHTML = `
+        <span class="spinner"></span>
+        <span id="statusText">${message}</span>
+      `;
+
+      document.getElementById("retryButton").classList.remove("show");
     }
 
-    syncAnimations();
-}
+    function setSuccess(user) {
+      document.getElementById("title").textContent = "Verification Complete";
 
-// ==========================================
-// BAN QUESTION: THE RUNAWAY "YES" BUTTON
-// It escapes a few times (just an animation),
-// then it can be caught and really unbans.
-// ==========================================
+      document.getElementById("description").textContent =
+        "Your Telegram account has been successfully verified. You can continue.";
 
-const arena = $("arena");
-const yesBtn = $("yesBtn");
-const noBtn = $("noBtn");
+      const status = document.getElementById("status");
 
-const TAUNTS = [
-    "Nice try 😏",
-    "Too slow! 🐢",
-    "Catch me if you can 🏃",
-    "Skill issue 😎",
-    "It is faster than your Wi-Fi 📶",
-    "The button has trust issues 😂",
-    "Almost... not really 🤏",
-    "Is that all you got? 💪",
-    "Boing! 🦘",
-    "You blinked. I moved 👀"
-];
+      status.className = "status success";
+      status.innerHTML = `
+        <svg class="success-icon" viewBox="0 0 24 24"
+          fill="none" stroke="currentColor" stroke-width="2.5"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="m5 12 4 4L19 6"/>
+        </svg>
+        <span>Account successfully verified</span>
+      `;
 
-let dodges = 0;
-let lastDodge = 0;
-let lastTaunt = -1;
-let caught = false;
-let unbanning = false;
+      const fullName = [
+        user.first_name || "",
+        user.last_name || ""
+      ].join(" ").trim();
 
-function resetAsk() {
-    dodges = 0;
-    lastTaunt = -1;
-    caught = false;
-    unbanning = false;
+      document.getElementById("userName").textContent =
+        fullName || user.username || "Telegram User";
 
-    $("askQ").textContent = "Want to be unbanned?";
-    $("taunt").textContent = "Go on, press Yes. We dare you 😏";
+      document.getElementById("userId").textContent =
+        "Telegram ID: " + user.id;
 
-    arena.style.display = "";
+      document.getElementById("userInfo").classList.add("show");
 
-    yesBtn.disabled = false;
-    yesBtn.classList.remove("caught", "hop");
-    yesBtn.style.left = "";
-    yesBtn.style.top = "";
-}
-
-function placeYes(pointerX, pointerY) {
-    const box = arena.getBoundingClientRect();
-
-    const width = yesBtn.offsetWidth;
-    const height = yesBtn.offsetHeight;
-
-    const maxX = Math.max(0, box.width - width);
-    const maxY = Math.max(0, box.height - height);
-
-    const no = noBtn.getBoundingClientRect();
-
-    const noX = no.left - box.left;
-    const noY = no.top - box.top;
-
-    let best = { x: 0, y: 0 };
-    let bestScore = -Infinity;
-
-    for (let i = 0; i < 16; i++) {
-        const x = Math.random() * maxX;
-        const y = Math.random() * maxY;
-
-        const centerX = x + width / 2;
-        const centerY = y + height / 2;
-
-        const distance = pointerX === null
-            ? 200
-            : Math.hypot(centerX - pointerX, centerY - pointerY);
-
-        const overlap =
-            x < noX + no.width + 8 &&
-            x + width + 8 > noX &&
-            y < noY + no.height + 8 &&
-            y + height + 8 > noY;
-
-        const score = distance - (overlap ? 1000 : 0);
-
-        if (score > bestScore) {
-            bestScore = score;
-            best = { x, y };
-        }
+      if (tg && tg.HapticFeedback) {
+        tg.HapticFeedback.notificationOccurred("success");
+      }
     }
 
-    yesBtn.style.left = best.x + "px";
-    yesBtn.style.top = best.y + "px";
-}
+    function setError(message) {
+      document.getElementById("title").textContent = "Verification Failed";
 
-function showTaunt() {
-    let text;
+      document.getElementById("description").textContent =
+        "We couldn't verify your account. Please try again.";
 
-    if (dodges === 1) {
-        text = "Whoa! The button moved 😳";
-    } else {
-        let index;
+      const status = document.getElementById("status");
 
-        do {
-            index = Math.floor(Math.random() * TAUNTS.length);
-        } while (index === lastTaunt);
+      status.className = "status error";
+      status.textContent = message;
 
-        lastTaunt = index;
-        text = TAUNTS[index];
+      document.getElementById("retryButton").classList.add("show");
     }
 
-    $("taunt").textContent = `${text}  (escaped ${dodges}×)`;
-}
+    // ==========================================
+    // AUTHENTICATION
+    // ==========================================
 
-function becomeCatchable() {
-    caught = true;
+    async function authenticate() {
+      setLoading("Verifying your Telegram account...");
 
-    // Back to the normal, reachable spot.
-    yesBtn.style.left = "";
-    yesBtn.style.top = "";
+      document.getElementById("userInfo").classList.remove("show");
 
-    yesBtn.classList.remove("hop");
-    yesBtn.classList.add("caught");
-
-    $("taunt").textContent =
-        "Okay okay, you earned it 🏆 Now press Yes!";
-
-    haptic("success");
-}
-
-function dodge(event) {
-    if (caught || unbanning) return;
-
-    const now = Date.now();
-
-    if (now - lastDodge < 180) return;
-
-    lastDodge = now;
-    dodges++;
-
-    if (dodges >= DODGES_NEEDED) {
-        becomeCatchable();
+      if (!tg || !tg.initData) {
+        setError("Please open this page using the Telegram Mini App.");
         return;
-    }
+      }
 
-    const box = arena.getBoundingClientRect();
-
-    let pointerX = null;
-    let pointerY = null;
-
-    if (event && typeof event.clientX === "number") {
-        pointerX = event.clientX - box.left;
-        pointerY = event.clientY - box.top;
-    }
-
-    placeYes(pointerX, pointerY);
-
-    yesBtn.classList.remove("hop");
-    void yesBtn.offsetWidth;
-    yesBtn.classList.add("hop");
-
-    showTaunt();
-    haptic("light");
-}
-
-["pointerenter", "pointerdown"].forEach(name => {
-    yesBtn.addEventListener(name, dodge);
-});
-
-yesBtn.addEventListener("touchstart", event => {
-    if (caught || unbanning) return;
-
-    event.preventDefault();
-    dodge(event.touches && event.touches[0]);
-}, { passive: false });
-
-yesBtn.addEventListener("focus", () => dodge());
-
-yesBtn.addEventListener("click", event => {
-    event.preventDefault();
-    event.stopPropagation();
-
-    if (!caught) {
-        dodge(event);
-        return;
-    }
-
-    unbanSelf();
-});
-
-noBtn.addEventListener("click", () => {
-    if (unbanning) return;
-
-    $("askQ").textContent = "Respect. 🫡";
-    $("taunt").textContent =
-        "You stay banned. If it is a mistake, contact the administrator.";
-
-    arena.style.display = "none";
-    haptic("light");
-});
-
-window.addEventListener("resize", () => {
-    if (!caught) {
-        yesBtn.style.left = "";
-        yesBtn.style.top = "";
-    }
-});
-
-// ==========================================
-// REAL UNBAN (after the button is caught)
-// Only automatic bans can be removed here.
-// The check runs again right after.
-// ==========================================
-
-async function unbanSelf() {
-    if (unbanning) return;
-
-    unbanning = true;
-    yesBtn.disabled = true;
-
-    $("taunt").textContent = "Unbanning you... 🔓";
-
-    try {
-        if (!tg || !tg.initData) {
-            $("taunt").textContent =
-                "Open this page from the VERIFY button in the bot.";
-            yesBtn.disabled = false;
-            return;
-        }
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(
-            () => controller.abort(),
-            15000
-        );
-
-        let response;
-
-        try {
-            response = await fetch(`${API_BASE}/api/unban-self`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "x-init-data": tg.initData,
-                    "x-device": getDeviceId()
-                },
-                signal: controller.signal
-            });
-        } finally {
-            clearTimeout(timeoutId);
-        }
-
-        let data;
-
-        try {
-            data = await response.json();
-        } catch {
-            throw new Error("Invalid response.");
-        }
-
-        if (response.ok && data.ok === true) {
-            haptic("success");
-
-            unbanning = false;
-
-            // Run the verification again from the start.
-            await verify();
-            return;
-        }
-
-        if (data.status === "admin_ban") {
-            $("askQ").textContent = "Sorry 😔";
-            $("taunt").textContent =
-                data.message ||
-                "This ban was set by an administrator. Please contact the administrator.";
-
-            arena.style.display = "none";
-            haptic("error");
-            return;
-        }
-
-        $("taunt").textContent =
-            data.message || "Could not unban you. Please try again.";
-
-        yesBtn.disabled = false;
-
-    } catch (error) {
-        console.error("Unban error:", error);
-
-        $("taunt").textContent =
-            error.name === "AbortError"
-                ? "The server took too long. Try again."
-                : "Connection problem. Try again.";
-
-        yesBtn.disabled = false;
-
-    } finally {
-        unbanning = false;
-    }
-}
-
-// ==========================================
-// CONFETTI
-// ==========================================
-
-function confetti() {
-    if (reduceMotion) return;
-
-    const canvas = $("confetti");
-    const ctx = canvas.getContext("2d");
-
-    if (!ctx) return;
-
-    const ratio = Math.min(window.devicePixelRatio || 1, 2);
-
-    const width = canvas.width = window.innerWidth * ratio;
-    const height = canvas.height = window.innerHeight * ratio;
-
-    canvas.style.display = "block";
-
-    const colors = [
-        "#4fd08f",
-        "#4cb8d9",
-        "#f0b440",
-        "#ff7a73",
-        "#b58cff"
-    ];
-
-    const pieces = Array.from({ length: 90 }, () => ({
-        x: Math.random() * width,
-        y: -Math.random() * height * 0.4,
-        size: (5 + Math.random() * 6) * ratio,
-        vx: (Math.random() - 0.5) * 3 * ratio,
-        vy: (2 + Math.random() * 4) * ratio,
-        rotation: Math.random() * 6,
-        spin: (Math.random() - 0.5) * 0.3,
-        color: colors[Math.floor(Math.random() * colors.length)]
-    }));
-
-    const start = performance.now();
-
-    function frame(time) {
-        ctx.clearRect(0, 0, width, height);
-
-        pieces.forEach(piece => {
-            piece.x += piece.vx;
-            piece.y += piece.vy;
-            piece.vy += 0.05 * ratio;
-            piece.rotation += piece.spin;
-
-            ctx.save();
-            ctx.translate(piece.x, piece.y);
-            ctx.rotate(piece.rotation);
-            ctx.fillStyle = piece.color;
-            ctx.fillRect(
-                -piece.size / 2,
-                -piece.size / 4,
-                piece.size,
-                piece.size / 2
-            );
-            ctx.restore();
+      try {
+        const response = await fetch(API_URL + "/api/auth", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-init-data": tg.initData,
+            "x-device": getDeviceId()
+          },
+          body: JSON.stringify({})
         });
 
-        if (time - start < 2600) {
-            requestAnimationFrame(frame);
-        } else {
-            ctx.clearRect(0, 0, width, height);
-            canvas.style.display = "none";
+        const data = await response.json();
+
+        if (!response.ok || !data.ok || !data.user) {
+          throw new Error(
+            data.message || "Authentication failed."
+          );
         }
+
+        setSuccess(data.user);
+
+      } catch (error) {
+        console.error("Authentication error:", error);
+
+        setError(
+          error.message || "Unable to connect. Please try again."
+        );
+      }
     }
 
-    requestAnimationFrame(frame);
-}
+    // ==========================================
+    // START
+    // ==========================================
 
-// ==========================================
-// DEVICE ID
-// ==========================================
-
-// This is a device identifier for basic abuse detection.
-// It is not a guaranteed permanent hardware identifier.
-
-function getDeviceId() {
-    const storageKey = "device_installation_id";
-
-    try {
-        let id = localStorage.getItem(storageKey);
-
-        if (!id) {
-            id = window.crypto?.randomUUID
-                ? window.crypto.randomUUID()
-                : Date.now().toString(36) +
-                  Math.random().toString(36).slice(2);
-
-            localStorage.setItem(storageKey, id);
-        }
-
-        return id;
-    } catch (error) {
-        // Some browsers restrict localStorage.
-        // The server must not assume this is a stable device identity.
-        return window.crypto?.randomUUID
-            ? window.crypto.randomUUID()
-            : Date.now().toString(36) +
-              Math.random().toString(36).slice(2);
-    }
-}
-
-// ==========================================
-// CLOSE MINI APP (user lands in the bot chat)
-// ==========================================
-
-function closeApp() {
-    try {
-        if (tg && typeof tg.close === "function") {
-            tg.close();
-        } else {
-            window.close();
-        }
-    } catch (error) {}
-}
-
-// ==========================================
-// VERIFICATION REQUEST
-// ==========================================
-
-let busy = false;
-
-async function verify() {
-    if (busy) return;
-
-    busy = true;
-    $("retryBtn").disabled = true;
-
-    setState(
-        "loading",
-        "Checking your account",
-        "Please wait while we securely check your account."
-    );
-
-    try {
-        if (!tg || !tg.initData) {
-            setState(
-                "warning",
-                "Open from Telegram",
-                "Telegram authentication data is missing. Open this verification page using the VERIFY button in your bot."
-            );
-            return;
-        }
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(
-            () => controller.abort(),
-            15000
-        );
-
-        let response;
-
-        try {
-            response = await fetch(`${API_BASE}/api/auth`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "x-init-data": tg.initData,
-                    "x-device": getDeviceId()
-                },
-                signal: controller.signal
-            });
-        } finally {
-            clearTimeout(timeoutId);
-        }
-
-        let data;
-
-        try {
-            data = await response.json();
-        } catch {
-            throw new Error("The server returned an invalid response.");
-        }
-
-        // --------------------------------------
-        // SUCCESS
-        // --------------------------------------
-
-        if (response.ok &&
-            data.ok === true &&
-            data.status === "verified") {
-
-            setState(
-                "success",
-                "You are verified!",
-                "Your account has been verified. Check the bot chat to continue."
-            );
-
-            confetti();
-            haptic("success");
-
-            // Close automatically; the bot already sent the message.
-            setTimeout(closeApp, 2200);
-            return;
-        }
-
-        // --------------------------------------
-        // BANNED
-        // --------------------------------------
-
-        if (data.status === "banned") {
-            setState(
-                "banned",
-                "You are banned",
-                data.message ||
-                "Your account is permanently banned. Contact the administrator if you believe this is a mistake."
-            );
-
-            haptic("error");
-            return;
-        }
-
-        // --------------------------------------
-        // OTHER SERVER ERRORS
-        // --------------------------------------
-
-        if (response.status === 403) {
-            setState(
-                "error",
-                "Access denied",
-                data.message ||
-                "The server could not authorize this verification."
-            );
-
-            return;
-        }
-
-        setState(
-            "error",
-            "Verification failed",
-            data.message ||
-            "We could not complete verification. Please try again."
-        );
-
-    } catch (error) {
-        console.error("Verification error:", error);
-
-        setState(
-            "error",
-            error.name === "AbortError"
-                ? "Request timed out"
-                : "Connection problem",
-            error.name === "AbortError"
-                ? "The server took too long to respond. Please try again."
-                : "Could not reach the verification server. Check your connection and try again."
-        );
-
-    } finally {
-        busy = false;
-        $("retryBtn").disabled = false;
-    }
-}
-
-// ==========================================
-// EVENTS
-// ==========================================
-
-$("retryBtn").addEventListener("click", verify);
-$("doneBtn").addEventListener("click", closeApp);
-
-// ==========================================
-// START
-// ==========================================
-
-setState(
-    "loading",
-    "Checking your account",
-    "Please wait while we securely check your account."
-);
-
-verify();
-</script>
+    authenticate();
+  </script>
 </body>
 </html>
