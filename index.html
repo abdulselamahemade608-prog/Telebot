@@ -389,6 +389,16 @@ h1 {
     box-shadow: 0 10px 20px -10px rgba(27,138,87,.8);
 }
 
+.choice.yes.caught {
+    animation: glow 1.1s ease-in-out infinite;
+}
+
+.choice.yes:disabled {
+    opacity: .6;
+    cursor: default;
+    animation: none;
+}
+
 .choice.no {
     right: 0;
     border: 1.5px solid var(--bad);
@@ -517,6 +527,18 @@ h1 {
     35% { transform: translateY(-30px) rotate(-10deg) scale(1.12); }
     70% { transform: translateY(4px) rotate(6deg) scale(.96); }
     100% { transform: translateY(0) rotate(0) scale(1); }
+}
+
+@keyframes glow {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 10px 20px -10px rgba(27,138,87,.8);
+    }
+    50% {
+        transform: scale(1.07);
+        box-shadow: 0 0 0 7px rgba(63,207,142,.22),
+                    0 10px 24px -8px rgba(27,138,87,.9);
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -686,6 +708,10 @@ if (tg && typeof tg.onEvent === "function") {
 
 // Must match your deployed backend.
 const API_BASE = "https://mrabdubot.vercel.app";
+
+// How many times the "Yes" button escapes before
+// it lets the user catch it (then it really unbans).
+const DODGES_NEEDED = 5;
 
 const $ = id => document.getElementById(id);
 
@@ -941,6 +967,8 @@ function setState(state, title, message) {
 
 // ==========================================
 // BAN QUESTION: THE RUNAWAY "YES" BUTTON
+// It escapes a few times (just an animation),
+// then it can be caught and really unbans.
 // ==========================================
 
 const arena = $("arena");
@@ -963,16 +991,22 @@ const TAUNTS = [
 let dodges = 0;
 let lastDodge = 0;
 let lastTaunt = -1;
+let caught = false;
+let unbanning = false;
 
 function resetAsk() {
     dodges = 0;
     lastTaunt = -1;
+    caught = false;
+    unbanning = false;
 
     $("askQ").textContent = "Want to be unbanned?";
     $("taunt").textContent = "Go on, press Yes. We dare you 😏";
 
     arena.style.display = "";
 
+    yesBtn.disabled = false;
+    yesBtn.classList.remove("caught", "hop");
     yesBtn.style.left = "";
     yesBtn.style.top = "";
 }
@@ -1028,10 +1062,6 @@ function showTaunt() {
 
     if (dodges === 1) {
         text = "Whoa! The button moved 😳";
-    } else if (dodges === 10) {
-        text = "The Yes button is on strike ✊😂";
-    } else if (dodges === 20) {
-        text = "You are persistent! The real answer: ask the administrator 🙂";
     } else {
         let index;
 
@@ -1046,13 +1076,36 @@ function showTaunt() {
     $("taunt").textContent = `${text}  (escaped ${dodges}×)`;
 }
 
+function becomeCatchable() {
+    caught = true;
+
+    // Back to the normal, reachable spot.
+    yesBtn.style.left = "";
+    yesBtn.style.top = "";
+
+    yesBtn.classList.remove("hop");
+    yesBtn.classList.add("caught");
+
+    $("taunt").textContent =
+        "Okay okay, you earned it 🏆 Now press Yes!";
+
+    haptic("success");
+}
+
 function dodge(event) {
+    if (caught || unbanning) return;
+
     const now = Date.now();
 
     if (now - lastDodge < 180) return;
 
     lastDodge = now;
     dodges++;
+
+    if (dodges >= DODGES_NEEDED) {
+        becomeCatchable();
+        return;
+    }
 
     const box = arena.getBoundingClientRect();
 
@@ -1079,20 +1132,29 @@ function dodge(event) {
 });
 
 yesBtn.addEventListener("touchstart", event => {
+    if (caught || unbanning) return;
+
     event.preventDefault();
     dodge(event.touches && event.touches[0]);
 }, { passive: false });
 
 yesBtn.addEventListener("focus", () => dodge());
 
-// Even a perfect click (keyboard etc.) never works.
 yesBtn.addEventListener("click", event => {
     event.preventDefault();
     event.stopPropagation();
-    dodge(event);
+
+    if (!caught) {
+        dodge(event);
+        return;
+    }
+
+    unbanSelf();
 });
 
 noBtn.addEventListener("click", () => {
+    if (unbanning) return;
+
     $("askQ").textContent = "Respect. 🫡";
     $("taunt").textContent =
         "You stay banned. If it is a mistake, contact the administrator.";
@@ -1102,9 +1164,104 @@ noBtn.addEventListener("click", () => {
 });
 
 window.addEventListener("resize", () => {
-    yesBtn.style.left = "";
-    yesBtn.style.top = "";
+    if (!caught) {
+        yesBtn.style.left = "";
+        yesBtn.style.top = "";
+    }
 });
+
+// ==========================================
+// REAL UNBAN (after the button is caught)
+// Only automatic bans can be removed here.
+// The check runs again right after.
+// ==========================================
+
+async function unbanSelf() {
+    if (unbanning) return;
+
+    unbanning = true;
+    yesBtn.disabled = true;
+
+    $("taunt").textContent = "Unbanning you... 🔓";
+
+    try {
+        if (!tg || !tg.initData) {
+            $("taunt").textContent =
+                "Open this page from the VERIFY button in the bot.";
+            yesBtn.disabled = false;
+            return;
+        }
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(
+            () => controller.abort(),
+            15000
+        );
+
+        let response;
+
+        try {
+            response = await fetch(`${API_BASE}/api/unban-self`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "x-init-data": tg.initData,
+                    "x-device": getDeviceId()
+                },
+                signal: controller.signal
+            });
+        } finally {
+            clearTimeout(timeoutId);
+        }
+
+        let data;
+
+        try {
+            data = await response.json();
+        } catch {
+            throw new Error("Invalid response.");
+        }
+
+        if (response.ok && data.ok === true) {
+            haptic("success");
+
+            unbanning = false;
+
+            // Run the verification again from the start.
+            await verify();
+            return;
+        }
+
+        if (data.status === "admin_ban") {
+            $("askQ").textContent = "Sorry 😔";
+            $("taunt").textContent =
+                data.message ||
+                "This ban was set by an administrator. Please contact the administrator.";
+
+            arena.style.display = "none";
+            haptic("error");
+            return;
+        }
+
+        $("taunt").textContent =
+            data.message || "Could not unban you. Please try again.";
+
+        yesBtn.disabled = false;
+
+    } catch (error) {
+        console.error("Unban error:", error);
+
+        $("taunt").textContent =
+            error.name === "AbortError"
+                ? "The server took too long. Try again."
+                : "Connection problem. Try again.";
+
+        yesBtn.disabled = false;
+
+    } finally {
+        unbanning = false;
+    }
+}
 
 // ==========================================
 // CONFETTI
