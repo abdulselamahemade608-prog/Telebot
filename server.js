@@ -1,314 +1,699 @@
-
 const express = require("express");
-const cors = require("cors");
 const crypto = require("crypto");
+const zlib = require("zlib");
 const { Pool } = require("pg");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-const BOT_TOKEN = process.env.BOT_TOKEN;
-const DATABASE_URL = process.env.DATABASE_URL;
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "";
-
-if (!BOT_TOKEN) {
-  throw new Error("BOT_TOKEN environment variable is required.");
-}
-
-if (!DATABASE_URL) {
-  throw new Error("DATABASE_URL environment variable is required.");
-}
-
-const pool = new Pool({
-  connectionString: DATABASE_URL,
-  ssl: process.env.NODE_ENV === "production"
-    ? { rejectUnauthorized: false }
-    : false
-});
 
 app.use(express.json({ limit: "1mb" }));
 
-const allowedOrigins = [
-  "https://abdulselamahemade608-prog.github.io",
-  "https://mrabdubot.vercel.app",
-  "http://localhost:3000",
-  "http://127.0.0.1:3000"
-];
+const VERSION = "emoji-v3";
 
-app.use(cors({
-  origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      return callback(null, true);
+// ==========================================
+// CORS
+// ==========================================
+
+const ALLOWED_ORIGIN =
+    "https://abdulselamahemade608-prog.github.io";
+
+app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
+    res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    res.header(
+        "Access-Control-Allow-Headers",
+        "Content-Type,x-init-data,x-device,x-status-key"
+    );
+
+    if (req.method === "OPTIONS") {
+        return res.status(204).end();
     }
 
-    return callback(new Error("Origin not allowed by CORS."));
-  },
-  methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: [
-    "Content-Type",
-    "x-init-data",
-    "x-device"
-  ]
-}));
+    next();
+});
+
+// ==========================================
+// ENVIRONMENT
+// ==========================================
+
+const BOT_TOKEN = process.env.BOT_TOKEN;
+const DATABASE_URL = process.env.DATABASE_URL;
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
+
+const MINI_APP_URL =
+    process.env.MINI_APP_URL ||
+    "https://abdulselamahemade608-prog.github.io/Telebot/";
 
 // ==========================================
 // DATABASE
 // ==========================================
 
-async function initializeDatabase() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS mini_users (
-      id BIGINT PRIMARY KEY,
-      first_name TEXT NOT NULL DEFAULT '',
-      last_name TEXT NOT NULL DEFAULT '',
-      username TEXT,
-      language_code TEXT,
-      is_premium BOOLEAN NOT NULL DEFAULT FALSE,
-      device_id TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
+const pool = DATABASE_URL
+    ? new Pool({
+          connectionString: DATABASE_URL,
+          ssl: { rejectUnauthorized: false }
+      })
+    : null;
 
-  console.log("Database initialized.");
+let dbReady = null;
+
+async function initDatabase() {
+    if (!pool) {
+        throw new Error("DATABASE_URL is missing.");
+    }
+
+    if (!dbReady) {
+        dbReady = pool.query(`
+            CREATE TABLE IF NOT EXISTS fraud_users (
+                telegram_id BIGINT PRIMARY KEY,
+                username TEXT,
+                first_name TEXT,
+                ip_hash TEXT,
+                device_hash TEXT,
+                vpn_detected BOOLEAN DEFAULT FALSE,
+                proxy_detected BOOLEAN DEFAULT FALSE,
+                risk_score INTEGER DEFAULT 0,
+                status TEXT DEFAULT 'verified',
+                ban_reason TEXT,
+                verification_message_sent BOOLEAN DEFAULT FALSE,
+                ban_message_sent BOOLEAN DEFAULT FALSE,
+                first_seen TIMESTAMP DEFAULT NOW(),
+                last_seen TIMESTAMP DEFAULT NOW(),
+                request_count INTEGER DEFAULT 0,
+                whitelisted BOOLEAN DEFAULT FALSE
+            )
+        `).catch(error => {
+            dbReady = null;
+            throw error;
+        });
+    }
+
+    return dbReady;
 }
 
 // ==========================================
-// TELEGRAM INIT DATA VERIFICATION
+// PREMIUM EMOJIS
+// DO NOT CHANGE THESE IDs
+// ==========================================
+
+const EMOJI_IDS = {
+    warning: "6285138648568437249",
+    success: "6001066354810034923",
+    star: "5791863789221581366",
+    info: "6071194666718469290"
+};
+
+function premium(id, fallback) {
+    return `<tg-emoji emoji-id='${id}'>${fallback}</tg-emoji>`;
+}
+
+const E = {
+    ok: premium(EMOJI_IDS.success, "✅"),
+    star: premium(EMOJI_IDS.star, "⭐"),
+    info: premium(EMOJI_IDS.info, "ℹ️")
+};
+
+const EMOJI_ALLOWED = new Set([
+    "6285138648568437249",
+    "6001066354810034923",
+    "5791863789221581366",
+    "6071194666718469290",
+    "5397782960512444700",
+    "5458603043203327669",
+    "5859691201250201986",
+    "5456140674028019486"
+]);
+
+const emojiCache = new Map();
+
+// ==========================================
+// HELPERS
+// ==========================================
+
+function safeEqualHex(a, b) {
+    if (!/^[a-f0-9]+$/i.test(String(a))) return false;
+    if (!/^[a-f0-9]+$/i.test(String(b))) return false;
+
+    const first = Buffer.from(String(a), "hex");
+    const second = Buffer.from(String(b), "hex");
+
+    return (
+        first.length === second.length &&
+        first.length > 0 &&
+        crypto.timingSafeEqual(first, second)
+    );
+}
+
+function safeEqualText(a, b) {
+    const first = crypto
+        .createHash("sha256")
+        .update(String(a))
+        .digest();
+
+    const second = crypto
+        .createHash("sha256")
+        .update(String(b))
+        .digest();
+
+    return crypto.timingSafeEqual(first, second);
+}
+
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+}
+
+function hasValidStatusKey(req) {
+    const key = req.headers["x-status-key"];
+
+    return (
+        Boolean(WEBHOOK_SECRET) &&
+        Boolean(key) &&
+        safeEqualText(key, WEBHOOK_SECRET)
+    );
+}
+
+// ==========================================
+// TELEGRAM API
+// ==========================================
+
+async function telegram(method, data = {}) {
+    if (!BOT_TOKEN) {
+        throw new Error("BOT_TOKEN is missing.");
+    }
+
+    const response = await fetch(
+        `https://api.telegram.org/bot${BOT_TOKEN}/${method}`,
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(data)
+        }
+    );
+
+    const result = await response.json();
+
+    if (!result.ok) {
+        throw new Error(
+            result.description || "Telegram API error."
+        );
+    }
+
+    return result.result;
+}
+
+async function sendTelegramMessage(chatId, text, extra = {}) {
+    return telegram("sendMessage", {
+        chat_id: chatId,
+        text,
+        parse_mode: "HTML",
+        ...extra
+    });
+}
+
+// ==========================================
+// SUCCESSFUL VERIFICATION MESSAGE
+// ==========================================
+
+async function sendVerifiedMessage(telegramId, firstName) {
+    const claim = await pool.query(
+        `
+        UPDATE fraud_users
+        SET verification_message_sent = true
+        WHERE telegram_id = $1
+          AND verification_message_sent = false
+        RETURNING telegram_id
+        `,
+        [telegramId]
+    );
+
+    if (claim.rowCount === 0) {
+        return false;
+    }
+
+    try {
+        await sendTelegramMessage(
+            telegramId,
+            `${E.star} ` +
+            "<b>Successfully verified!</b>\n\n" +
+            `Welcome, <b>${escapeHtml(firstName)}</b>. ` +
+            "Your account has been verified.\n\n" +
+            "Press the button below to continue.",
+            {
+                reply_markup: {
+                    inline_keyboard: [
+                        [
+                            {
+                                text: "Continue",
+                                style: "success",
+                                icon_custom_emoji_id: EMOJI_IDS.star,
+                                callback_data: "verified_ok"
+                            }
+                        ]
+                    ]
+                }
+            }
+        );
+
+        return true;
+
+    } catch (error) {
+        console.error(
+            "VERIFIED MESSAGE ERROR:",
+            error.message
+        );
+
+        await pool.query(
+            `
+            UPDATE fraud_users
+            SET verification_message_sent = false
+            WHERE telegram_id = $1
+            `,
+            [telegramId]
+        ).catch(() => {});
+
+        return false;
+    }
+}
+
+// ==========================================
+// VERIFY TELEGRAM MINI APP DATA
 // ==========================================
 
 function verifyTelegramInitData(initData) {
-  if (!initData || typeof initData !== "string") {
-    return null;
-  }
+    if (!initData || !BOT_TOKEN) {
+        throw new Error(
+            "Telegram authentication data is missing."
+        );
+    }
 
-  try {
     const params = new URLSearchParams(initData);
     const receivedHash = params.get("hash");
 
     if (!receivedHash) {
-      return null;
+        throw new Error("Telegram hash is missing.");
     }
 
     params.delete("hash");
 
-    const dataCheckString = [...params.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, value]) => `${key}=${value}`)
-      .join("\n");
+    const dataCheckString = Array.from(params.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, value]) => `${key}=${value}`)
+        .join("\n");
 
     const secretKey = crypto
-      .createHmac("sha256", "WebAppData")
-      .update(BOT_TOKEN)
-      .digest();
+        .createHmac("sha256", "WebAppData")
+        .update(BOT_TOKEN)
+        .digest();
 
     const calculatedHash = crypto
-      .createHmac("sha256", secretKey)
-      .update(dataCheckString)
-      .digest("hex");
+        .createHmac("sha256", secretKey)
+        .update(dataCheckString)
+        .digest("hex");
 
-    const received = Buffer.from(receivedHash, "hex");
-    const calculated = Buffer.from(calculatedHash, "hex");
-
-    if (
-      received.length !== calculated.length ||
-      !crypto.timingSafeEqual(received, calculated)
-    ) {
-      return null;
+    if (!safeEqualHex(calculatedHash, receivedHash)) {
+        throw new Error(
+            "Invalid Telegram authentication data."
+        );
     }
 
     const authDate = Number(params.get("auth_date"));
     const now = Math.floor(Date.now() / 1000);
 
-    // Reject invalid or old Telegram login data.
     if (
-      !Number.isFinite(authDate) ||
-      authDate > now + 60 ||
-      now - authDate > 86400
+        !authDate ||
+        authDate > now + 60 ||
+        now - authDate > 3600
     ) {
-      return null;
+        throw new Error(
+            "Telegram session expired. Open the bot again."
+        );
     }
 
     const userString = params.get("user");
 
     if (!userString) {
-      return null;
+        throw new Error("Telegram user data is missing.");
     }
 
-    const user = JSON.parse(userString);
+    let user;
 
-    if (!user || !user.id) {
-      return null;
+    try {
+        user = JSON.parse(userString);
+    } catch {
+        throw new Error("Invalid Telegram user data.");
+    }
+
+    if (!user.id || !Number.isSafeInteger(user.id)) {
+        throw new Error("Invalid Telegram user ID.");
     }
 
     return user;
-  } catch (error) {
-    console.error("Telegram verification error:", error.message);
-    return null;
-  }
 }
 
 // ==========================================
-// HEALTH CHECK
+// ROOT / HEALTH
 // ==========================================
 
 app.get("/", (req, res) => {
-  res.json({
-    ok: true,
-    service: "Telegram Mini App",
-    status: "online",
-    ban_system: false
-  });
+    res.json({
+        ok: true,
+        app: "Telegram Verification Mini App",
+        status: "online",
+        version: VERSION,
+        database: Boolean(pool),
+        mini_app: MINI_APP_URL
+    });
 });
 
-app.get("/health", async (req, res) => {
-  try {
-    await pool.query("SELECT 1");
+app.get("/api/health", async (req, res) => {
+    try {
+        if (!pool) {
+            return res.status(500).json({
+                ok: false,
+                online: true,
+                version: VERSION,
+                database: false
+            });
+        }
 
-    res.json({
-      ok: true,
-      service: "Telegram Mini App",
-      database: "connected",
-      ban_system: false
-    });
-  } catch (error) {
-    res.status(500).json({
-      ok: false,
-      database: "disconnected"
-    });
-  }
+        await pool.query("SELECT 1");
+
+        return res.json({
+            ok: true,
+            online: true,
+            version: VERSION,
+            database: true
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            ok: false,
+            online: true,
+            version: VERSION,
+            database: false
+        });
+    }
 });
 
 // ==========================================
-// TELEGRAM AUTHENTICATION
+// PREMIUM EMOJI API
+// GET /api/emoji/:id
+// ==========================================
+
+app.get("/api/emoji/:id", async (req, res) => {
+    try {
+        const id = String(req.params.id || "");
+
+        if (!EMOJI_ALLOWED.has(id)) {
+            return res.status(404).json({
+                ok: false,
+                error: "Emoji not allowed."
+            });
+        }
+
+        let item = emojiCache.get(id);
+
+        if (!item) {
+            const stickers = await telegram(
+                "getCustomEmojiStickers",
+                { custom_emoji_ids: [id] }
+            );
+
+            const sticker = Array.isArray(stickers)
+                ? stickers[0]
+                : null;
+
+            if (!sticker) {
+                throw new Error("Emoji not found.");
+            }
+
+            const file = await telegram(
+                "getFile",
+                { file_id: sticker.file_id }
+            );
+
+            const download = await fetch(
+                `https://api.telegram.org/file/bot${BOT_TOKEN}/${file.file_path}`
+            );
+
+            if (!download.ok) {
+                throw new Error("Emoji download failed.");
+            }
+
+            const buffer = Buffer.from(
+                await download.arrayBuffer()
+            );
+
+            const path = String(file.file_path).toLowerCase();
+
+            if (path.endsWith(".tgs")) {
+                item = {
+                    type: "application/json",
+                    body: zlib.gunzipSync(buffer)
+                };
+            } else if (path.endsWith(".webm")) {
+                item = {
+                    type: "video/webm",
+                    body: buffer
+                };
+            } else {
+                item = {
+                    type: "image/webp",
+                    body: buffer
+                };
+            }
+
+            emojiCache.set(id, item);
+        }
+
+        res.set("Content-Type", item.type);
+        res.set("Cache-Control", "public, max-age=86400");
+
+        return res.send(item.body);
+
+    } catch (error) {
+        console.error("EMOJI ERROR:", error.message);
+
+        return res.status(502).json({
+            ok: false,
+            error: "Emoji could not be loaded."
+        });
+    }
+});
+
+// ==========================================
+// MINI APP AUTH
+// NO BAN SYSTEM
+// NO VPN / PROXY CHECK
+// NO MULTIPLE ACCOUNT BAN
 // ==========================================
 
 app.post("/api/auth", async (req, res) => {
-  try {
-    const initData = req.headers["x-init-data"];
-    const deviceId = String(req.headers["x-device"] || "").slice(0, 200);
+    try {
+        if (!pool) {
+            return res.status(500).json({
+                ok: false,
+                status: "error",
+                message: "Database is not configured."
+            });
+        }
 
-    const user = verifyTelegramInitData(initData);
+        await initDatabase();
 
-    if (!user) {
-      return res.status(401).json({
+        const initData = req.headers["x-init-data"];
+
+        if (!initData) {
+            return res.status(400).json({
+                ok: false,
+                status: "error",
+                message: "Missing Telegram data."
+            });
+        }
+
+        const telegramUser = verifyTelegramInitData(initData);
+
+        const telegramId = String(telegramUser.id);
+        const username = telegramUser.username || "";
+        const firstName = telegramUser.first_name || "User";
+
+        // ======================================
+        // SAVE USER AS VERIFIED
+        // Old banned records are also reset.
+        // ======================================
+
+        await pool.query(
+            `
+            INSERT INTO fraud_users (
+                telegram_id,
+                username,
+                first_name,
+                status,
+                ban_reason,
+                vpn_detected,
+                proxy_detected,
+                risk_score,
+                ban_message_sent,
+                verification_message_sent,
+                last_seen,
+                request_count,
+                whitelisted
+            )
+            VALUES (
+                $1,$2,$3,'verified',NULL,
+                false,false,0,false,false,NOW(),1,false
+            )
+            ON CONFLICT (telegram_id)
+            DO UPDATE SET
+                username = EXCLUDED.username,
+                first_name = EXCLUDED.first_name,
+                status = 'verified',
+                ban_reason = NULL,
+                vpn_detected = false,
+                proxy_detected = false,
+                risk_score = 0,
+                ban_message_sent = false,
+                last_seen = NOW(),
+                request_count = fraud_users.request_count + 1
+            `,
+            [
+                telegramId,
+                username,
+                firstName
+            ]
+        );
+
+        // ======================================
+        // SEND SUCCESS MESSAGE
+        // ======================================
+
+        await pool.query(
+            `
+            UPDATE fraud_users
+            SET verification_message_sent = false
+            WHERE telegram_id = $1
+            `,
+            [telegramId]
+        );
+
+        const messageSent = await sendVerifiedMessage(
+            telegramId,
+            firstName
+        );
+
+        return res.json({
+            ok: true,
+            status: "verified",
+            message: "Verification finished!",
+            telegram_id: telegramId,
+            message_sent: messageSent
+        });
+
+    } catch (error) {
+        console.error("AUTH ERROR:", error.message);
+
+        return res.status(500).json({
+            ok: false,
+            status: "error",
+            message:
+                "Verification could not be completed. Please try again."
+        });
+    }
+});
+
+// ==========================================
+// STATUS API FOR TELEBOT CREATOR
+// GET /api/status?id=USER_ID
+// Header: x-status-key
+//
+// No user can have banned status through
+// this backend anymore.
+// ==========================================
+
+app.get("/api/status", async (req, res) => {
+    try {
+        if (!hasValidStatusKey(req)) {
+            return res.status(403).json({
+                ok: false,
+                status: "forbidden"
+            });
+        }
+
+        const id = String(req.query.id || "");
+
+        if (!/^\d+$/.test(id)) {
+            return res.status(400).json({
+                ok: false,
+                status: "error"
+            });
+        }
+
+        if (!pool) {
+            return res.status(500).json({
+                ok: false,
+                status: "error"
+            });
+        }
+
+        await initDatabase();
+
+        const result = await pool.query(
+            `
+            SELECT telegram_id
+            FROM fraud_users
+            WHERE telegram_id = $1
+            `,
+            [id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.json({
+                ok: true,
+                status: "unknown"
+            });
+        }
+
+        return res.json({
+            ok: true,
+            status: "verified"
+        });
+
+    } catch (error) {
+        console.error("STATUS ERROR:", error.message);
+
+        return res.status(500).json({
+            ok: false,
+            status: "error"
+        });
+    }
+});
+
+// ==========================================
+// 404
+// ==========================================
+
+app.use((req, res) => {
+    res.status(404).json({
         ok: false,
-        message: "Telegram authentication failed. Please reopen the Mini App."
-      });
-    }
-
-    const result = await pool.query(
-      `
-      INSERT INTO mini_users (
-        id,
-        first_name,
-        last_name,
-        username,
-        language_code,
-        is_premium,
-        device_id,
-        last_seen
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-      ON CONFLICT (id)
-      DO UPDATE SET
-        first_name = EXCLUDED.first_name,
-        last_name = EXCLUDED.last_name,
-        username = EXCLUDED.username,
-        language_code = EXCLUDED.language_code,
-        is_premium = EXCLUDED.is_premium,
-        device_id = EXCLUDED.device_id,
-        last_seen = NOW()
-      RETURNING
-        id,
-        first_name,
-        last_name,
-        username,
-        language_code,
-        is_premium,
-        created_at,
-        last_seen
-      `,
-      [
-        String(user.id),
-        user.first_name || "",
-        user.last_name || "",
-        user.username || null,
-        user.language_code || null,
-        Boolean(user.is_premium),
-        deviceId || null
-      ]
-    );
-
-    return res.json({
-      ok: true,
-      authenticated: true,
-      banned: false,
-      status: "active",
-      message: "Authentication successful.",
-      user: result.rows[0]
+        error: "Route not found."
     });
-
-  } catch (error) {
-    console.error("Auth error:", error);
-
-    return res.status(500).json({
-      ok: false,
-      message: "Server error. Please try again."
-    });
-  }
 });
 
 // ==========================================
-// OPTIONAL: TELEGRAM WEBHOOK
+// VERCEL / LOCAL
 // ==========================================
 
-app.post("/telegram/webhook", async (req, res) => {
-  if (WEBHOOK_SECRET) {
-    const suppliedSecret = req.headers["x-telegram-bot-api-secret-token"];
+module.exports = app;
 
-    if (suppliedSecret !== WEBHOOK_SECRET) {
-      return res.sendStatus(403);
-    }
-  }
+if (require.main === module) {
+    const port = process.env.PORT || 3000;
 
-  // This endpoint intentionally does not ban or restrict users.
-  return res.sendStatus(200);
-});
-
-// ==========================================
-// ERROR HANDLER
-// ==========================================
-
-app.use((error, req, res, next) => {
-  console.error("Server error:", error.message);
-
-  if (res.headersSent) {
-    return next(error);
-  }
-
-  res.status(500).json({
-    ok: false,
-    message: "Internal server error."
-  });
-});
-
-// ==========================================
-// START SERVER
-// ==========================================
-
-async function startServer() {
-  try {
-    await initializeDatabase();
-
-    app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-      console.log("Ban system: DISABLED");
+    app.listen(port, () => {
+        console.log(
+            `Backend running on port ${port}`
+        );
     });
-  } catch (error) {
-    console.error("Failed to start server:", error);
-    process.exit(1);
-  }
-}
-
-startServer();
+        }
