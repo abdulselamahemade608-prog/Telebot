@@ -1,9 +1,12 @@
 const express = require("express");
 const crypto = require("crypto");
+const zlib = require("zlib");
 const { Pool } = require("pg");
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
+
+const VERSION = "emoji-v1";
 
 // ==========================================
 // CORS
@@ -81,6 +84,21 @@ const E = {
     star: premium(EMOJI_IDS.star, "⭐"),
     info: premium(EMOJI_IDS.info, "ℹ️")
 };
+
+// Premium emojis the Mini App page is allowed to download
+// (only these IDs, so nobody can abuse the endpoint).
+const EMOJI_ALLOWED = new Set([
+    "6285138648568437249",
+    "6001066354810034923",
+    "5791863789221581366",
+    "6071194666718469290",
+    "5397782960512444700",
+    "5458603043203327669",
+    "5859691201250201986",
+    "5456140674028019486"
+]);
+
+const emojiCache = new Map();
 
 // ==========================================
 // DATABASE
@@ -586,6 +604,7 @@ app.get("/", (req, res) => {
         ok: true,
         app: "Telegram Verification Mini App",
         status: "online",
+        version: VERSION,
         database: Boolean(pool),
         mini_app: MINI_APP_URL
     });
@@ -597,6 +616,7 @@ app.get("/api/health", async (req, res) => {
             return res.status(500).json({
                 ok: false,
                 online: true,
+                version: VERSION,
                 database: false
             });
         }
@@ -606,13 +626,103 @@ app.get("/api/health", async (req, res) => {
         return res.json({
             ok: true,
             online: true,
+            version: VERSION,
             database: true
         });
     } catch (error) {
         return res.status(500).json({
             ok: false,
             online: true,
+            version: VERSION,
             database: false
+        });
+    }
+});
+
+// ==========================================
+// PREMIUM EMOJI FOR THE MINI APP PAGE
+// GET /api/emoji/:id
+// The bot token stays on the server. Animated
+// emojis (.tgs) are unzipped into Lottie JSON.
+// ==========================================
+
+app.get("/api/emoji/:id", async (req, res) => {
+    try {
+        const id = String(req.params.id || "");
+
+        if (!EMOJI_ALLOWED.has(id)) {
+            return res.status(404).json({
+                ok: false,
+                error: "Emoji not allowed."
+            });
+        }
+
+        let item = emojiCache.get(id);
+
+        if (!item) {
+            const stickers = await telegram(
+                "getCustomEmojiStickers",
+                { custom_emoji_ids: [id] }
+            );
+
+            const sticker = Array.isArray(stickers)
+                ? stickers[0]
+                : null;
+
+            if (!sticker) {
+                throw new Error("Emoji not found.");
+            }
+
+            const file = await telegram(
+                "getFile",
+                { file_id: sticker.file_id }
+            );
+
+            const download = await fetch(
+                `https://api.telegram.org/file/bot${BOT_TOKEN}/${file.file_path}`
+            );
+
+            if (!download.ok) {
+                throw new Error("Emoji download failed.");
+            }
+
+            const buffer = Buffer.from(
+                await download.arrayBuffer()
+            );
+
+            const path = String(file.file_path).toLowerCase();
+
+            if (path.endsWith(".tgs")) {
+                item = {
+                    type: "application/json",
+                    body: zlib.gunzipSync(buffer)
+                };
+            } else if (path.endsWith(".webm")) {
+                item = {
+                    type: "video/webm",
+                    body: buffer
+                };
+            } else {
+                item = {
+                    type: "image/webp",
+                    body: buffer
+                };
+            }
+
+            emojiCache.set(id, item);
+        }
+
+        res.set("Content-Type", item.type);
+        res.set("Cache-Control", "public, max-age=86400");
+
+        return res.send(item.body);
+
+    } catch (error) {
+        console.error("EMOJI ERROR:", error.message);
+
+        return res.status(502).json({
+            ok: false,
+            error: "Emoji could not be loaded."
         });
     }
 });
@@ -1093,4 +1203,4 @@ if (require.main === module) {
     app.listen(port, () => {
         console.log(`Backend running on port ${port}`);
     });
-                }
+        }
