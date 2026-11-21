@@ -16,30 +16,44 @@
     -webkit-tap-highlight-color: transparent;
 }
 
+[hidden] {
+    display: none !important;
+}
+
 :root {
     --page: #d9e3e8;
     --paper: #fbfcfd;
+    --tint: #eef3f6;
     --ink: #10222c;
     --soft: #4d6270;
     --line: #c3d0d8;
     --accent: #0d6f8f;
+    --accent-2: #3fb0d4;
     --ok: #1b8a57;
     --bad: #c53b36;
     --warn: #c98300;
-    --shadow: 0 18px 40px -18px rgba(16,34,44,.35);
+    --b1: #8fd3ea;
+    --b2: #cdb6ff;
+    --b3: #9fe8c3;
+    --shadow: 0 24px 50px -22px rgba(16,34,44,.45);
 }
 
 :root[data-theme="dark"] {
-    --page: #0c161c;
-    --paper: #16252e;
+    --page: #0b151b;
+    --paper: #15242d;
+    --tint: #1c303b;
     --ink: #eaf1f4;
     --soft: #97aab5;
     --line: #2a3d48;
     --accent: #4cb8d9;
+    --accent-2: #2a86a8;
     --ok: #4fd08f;
     --bad: #ff7a73;
     --warn: #f0b440;
-    --shadow: 0 18px 40px -18px rgba(0,0,0,.7);
+    --b1: #1d6f8c;
+    --b2: #5a3fa8;
+    --b3: #1b7a55;
+    --shadow: 0 24px 50px -22px rgba(0,0,0,.8);
 }
 
 html, body {
@@ -58,15 +72,103 @@ body {
     color: var(--ink);
     font-family: system-ui, -apple-system, "Segoe UI", Roboto,
                  Arial, sans-serif;
+    overflow-x: hidden;
 }
 
-.pass {
-    width: 100%;
-    max-width: 380px;
+/* ---------- Background ---------- */
+
+.bg {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
     overflow: hidden;
-    border-radius: 22px;
+    pointer-events: none;
+}
+
+.blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(60px);
+    opacity: .6;
+    animation: drift 18s ease-in-out infinite;
+}
+
+.b1 {
+    top: -80px;
+    left: -60px;
+    width: 280px;
+    height: 280px;
+    background: var(--b1);
+}
+
+.b2 {
+    right: -90px;
+    bottom: 8%;
+    width: 300px;
+    height: 300px;
+    background: var(--b2);
+    animation-delay: -6s;
+}
+
+.b3 {
+    bottom: -100px;
+    left: 18%;
+    width: 240px;
+    height: 240px;
+    background: var(--b3);
+    animation-delay: -12s;
+}
+
+#confetti {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: none;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+/* ---------- Premium emoji ---------- */
+
+.pe {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.25em;
+    height: 1.25em;
+    vertical-align: -.25em;
+    line-height: 1;
+}
+
+.pe-media {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.pe-media svg,
+.pe-media video,
+.pe-media img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+/* ---------- Card ---------- */
+
+.pass {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 390px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 28px;
     background: var(--paper);
     box-shadow: var(--shadow);
+    animation: rise .6s cubic-bezier(.2,.9,.3,1) both;
 }
 
 .pass-top {
@@ -75,51 +177,74 @@ body {
     justify-content: space-between;
     padding: 17px 22px;
     border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, var(--tint), transparent);
     color: var(--soft);
     font-size: 13px;
 }
 
 .pass-top strong {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     color: var(--ink);
     font-size: 14px;
-    font-weight: 700;
+    font-weight: 750;
+    letter-spacing: .2px;
 }
 
 .dot {
-    width: 9px;
-    height: 9px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
     background: var(--accent);
+    box-shadow: 0 0 0 4px rgba(13,111,143,.18);
+    transition: background .3s;
 }
 
 .pass-body {
-    padding: 32px 25px 30px;
+    padding: 30px 24px 28px;
     text-align: center;
 }
 
+/* ---------- Stamp ---------- */
+
 .stamp {
     --stamp: var(--accent);
+    --glow: rgba(13,111,143,.28);
     position: relative;
-    width: 124px;
-    height: 124px;
-    margin: 0 auto 27px;
+    width: 132px;
+    height: 132px;
+    margin: 0 auto 26px;
     color: var(--stamp);
+}
+
+.stamp::before {
+    position: absolute;
+    inset: -16px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--glow), transparent 68%);
+    content: "";
+    animation: pulse 2.6s ease-in-out infinite;
 }
 
 .stamp[data-state="success"] {
     --stamp: var(--ok);
+    --glow: rgba(27,138,87,.3);
 }
 
-.stamp[data-state="banned"] {
+.stamp[data-state="banned"],
+.stamp[data-state="error"] {
     --stamp: var(--bad);
+    --glow: rgba(197,59,54,.3);
 }
 
 .stamp[data-state="warning"] {
     --stamp: var(--warn);
+    --glow: rgba(201,131,0,.3);
 }
 
-.stamp[data-state="error"] {
-    --stamp: var(--bad);
+.stamp.pop {
+    animation: pop .55s cubic-bezier(.3,1.6,.5,1);
 }
 
 .frame {
@@ -139,7 +264,7 @@ body {
     fill: none;
     stroke: currentColor;
     stroke-width: 1.4;
-    opacity: .55;
+    opacity: .5;
 }
 
 .tick {
@@ -147,6 +272,13 @@ body {
     stroke: currentColor;
     stroke-width: 1.4;
     opacity: .4;
+}
+
+.stamp[data-state="loading"] .outer {
+    stroke-dasharray: 4 9;
+    stroke-linecap: round;
+    transform-origin: 66px 66px;
+    animation: spin 6s linear infinite;
 }
 
 .glyph {
@@ -157,27 +289,14 @@ body {
     justify-content: center;
 }
 
-.glyph svg {
-    width: 52px;
-    height: 52px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 3;
-    stroke-linecap: round;
-    stroke-linejoin: round;
+.glyph .pe {
+    width: 68px;
+    height: 68px;
+    font-size: 58px;
+    animation: floaty 2.8s ease-in-out infinite;
 }
 
-.stamp[data-state="loading"] .outer {
-    stroke-dasharray: 4 9;
-    stroke-linecap: round;
-    transform-origin: 62px 62px;
-    animation: spin 6s linear infinite;
-}
-
-.stamp[data-state="loading"] .g-load {
-    display: flex;
-}
-
+.stamp[data-state="loading"] .g-load,
 .stamp[data-state="success"] .g-ok,
 .stamp[data-state="banned"] .g-ban,
 .stamp[data-state="warning"] .g-warn,
@@ -185,21 +304,25 @@ body {
     display: flex;
 }
 
-.stamp[data-state="loading"] .g-load svg {
-    animation: breathe 1.5s ease-in-out infinite;
+.stamp[data-state="banned"] .glyph .pe {
+    animation: wobble .9s ease-in-out infinite;
 }
 
+/* ---------- Text ---------- */
+
 h1 {
-    margin-bottom: 11px;
-    font-size: 24px;
-    line-height: 1.25;
-    font-weight: 750;
+    margin-bottom: 10px;
+    font-size: 25px;
+    line-height: 1.2;
+    font-weight: 800;
+    letter-spacing: -.3px;
+    text-wrap: balance;
     overflow-wrap: anywhere;
 }
 
 .msg {
-    max-width: 31ch;
-    min-height: 48px;
+    max-width: 32ch;
+    min-height: 44px;
     margin: 0 auto;
     color: var(--soft);
     font-size: 14px;
@@ -207,19 +330,98 @@ h1 {
     overflow-wrap: anywhere;
 }
 
+.chip {
+    display: inline-block;
+    max-width: 100%;
+    margin-top: 16px;
+    padding: 8px 14px;
+    border: 1px dashed var(--line);
+    border-radius: 999px;
+    background: var(--tint);
+    color: var(--ink);
+    font-size: 12.5px;
+    line-height: 1.5;
+    transition: opacity .25s;
+}
+
+/* ---------- Ban question (runaway button) ---------- */
+
+.ask {
+    margin-top: 22px;
+    padding: 16px 14px 14px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: var(--tint);
+}
+
+.ask-q {
+    font-size: 16px;
+    font-weight: 800;
+}
+
+.arena {
+    position: relative;
+    height: 128px;
+    margin-top: 10px;
+}
+
+.choice {
+    position: absolute;
+    top: 38px;
+    min-width: 116px;
+    height: 52px;
+    padding: 0 20px;
+    border: 0;
+    border-radius: 15px;
+    font: inherit;
+    font-size: 16px;
+    font-weight: 800;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: left .32s cubic-bezier(.34,1.56,.64,1),
+                top .32s cubic-bezier(.34,1.56,.64,1);
+}
+
+.choice.yes {
+    left: 0;
+    background: linear-gradient(135deg, #1b8a57, #3fcf8e);
+    color: #fff;
+    box-shadow: 0 10px 20px -10px rgba(27,138,87,.8);
+}
+
+.choice.no {
+    right: 0;
+    border: 1.5px solid var(--bad);
+    background: transparent;
+    color: var(--bad);
+}
+
+.choice.hop {
+    animation: hop .45s ease-out;
+}
+
+.taunt {
+    min-height: 20px;
+    color: var(--soft);
+    font-size: 12.5px;
+    line-height: 1.6;
+}
+
+/* ---------- Buttons ---------- */
+
 .btn {
     display: none;
     width: 100%;
-    min-height: 50px;
+    min-height: 52px;
     align-items: center;
     justify-content: center;
     gap: 9px;
     margin-top: 24px;
     padding: 14px 16px;
-    border-radius: 13px;
+    border-radius: 15px;
     font: inherit;
     font-size: 15px;
-    font-weight: 700;
+    font-weight: 750;
     cursor: pointer;
 }
 
@@ -238,15 +440,17 @@ h1 {
     transform: scale(.98);
 }
 
-.btn:focus-visible {
+.btn:focus-visible,
+.choice:focus-visible {
     outline: 3px solid var(--accent);
     outline-offset: 3px;
 }
 
 .btn.ok {
     border: 0;
-    background: var(--ink);
-    color: var(--paper);
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #fff;
+    box-shadow: 0 12px 24px -12px var(--accent);
 }
 
 .btn.retry {
@@ -255,47 +459,64 @@ h1 {
     color: var(--ink);
 }
 
+/* ---------- Footer ---------- */
+
 .tear {
-    position: relative;
     height: 0;
-    margin: 0 18px;
+    margin: 0 20px;
     border-top: 2px dashed var(--line);
 }
 
-.tear::before,
-.tear::after {
-    position: absolute;
-    top: -12px;
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    background: var(--page);
-    content: "";
-}
-
-.tear::before {
-    left: -29px;
-}
-
-.tear::after {
-    right: -29px;
-}
-
 .pass-foot {
-    padding: 17px 20px 19px;
+    padding: 17px 22px 20px;
     color: var(--soft);
     text-align: center;
     font-size: 12px;
-    line-height: 1.6;
+    line-height: 1.7;
 }
+
+/* ---------- Animations ---------- */
 
 @keyframes spin {
     to { transform: rotate(360deg); }
 }
 
-@keyframes breathe {
-    0%, 100% { transform: scale(.92); opacity: .7; }
-    50% { transform: scale(1); opacity: 1; }
+@keyframes rise {
+    from { opacity: 0; transform: translateY(18px) scale(.97); }
+    to { opacity: 1; transform: none; }
+}
+
+@keyframes pop {
+    0% { transform: scale(.7); }
+    100% { transform: scale(1); }
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: .65; transform: scale(.96); }
+    50% { opacity: 1; transform: scale(1.04); }
+}
+
+@keyframes floaty {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
+
+@keyframes wobble {
+    0%, 100% { transform: rotate(0); }
+    25% { transform: rotate(-9deg); }
+    75% { transform: rotate(9deg); }
+}
+
+@keyframes drift {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(34px, 24px) scale(1.12); }
+}
+
+@keyframes hop {
+    0% { transform: translateY(0) rotate(0) scale(1); }
+    35% { transform: translateY(-30px) rotate(-10deg) scale(1.12); }
+    70% { transform: translateY(4px) rotate(6deg) scale(.96); }
+    100% { transform: translateY(0) rotate(0) scale(1); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -309,10 +530,22 @@ h1 {
 </head>
 
 <body>
+
+<div class="bg" aria-hidden="true">
+    <i class="blob b1"></i>
+    <i class="blob b2"></i>
+    <i class="blob b3"></i>
+</div>
+
+<canvas id="confetti" aria-hidden="true"></canvas>
+
 <main class="pass">
 
     <header class="pass-top">
-        <strong>Account Verification</strong>
+        <strong>
+            <span class="pe" data-id="5397782960512444700">⭐</span>
+            Account Verification
+        </strong>
         <span class="dot" id="dot"></span>
     </header>
 
@@ -321,43 +554,31 @@ h1 {
         <div class="stamp" id="stamp" data-state="loading"
              role="img" aria-label="Verification status">
 
-            <svg class="frame" viewBox="0 0 124 124" aria-hidden="true">
-                <circle class="outer" cx="62" cy="62" r="58"/>
-                <circle class="inner" cx="62" cy="62" r="49"/>
-                <circle class="tick" cx="62" cy="62" r="53"
+            <svg class="frame" viewBox="0 0 132 132" aria-hidden="true">
+                <circle class="outer" cx="66" cy="66" r="62"/>
+                <circle class="inner" cx="66" cy="66" r="52"/>
+                <circle class="tick" cx="66" cy="66" r="57"
                         stroke-dasharray="1 7"/>
             </svg>
 
             <div class="glyph g-load" aria-hidden="true">
-                <svg viewBox="0 0 24 24">
-                    <path d="M12 3l7.5 3v5.2c0 4.6-3.1 8.4-7.5 9.8-4.4-1.4-7.5-5.2-7.5-9.8V6L12 3z"/>
-                </svg>
+                <span class="pe" data-id="5458603043203327669">🔍</span>
             </div>
 
             <div class="glyph g-ok" aria-hidden="true">
-                <svg viewBox="0 0 24 24">
-                    <path d="M5.5 12.8l4.2 4.2L18.5 7.5"/>
-                </svg>
+                <span class="pe" data-id="5791863789221581366">✅</span>
             </div>
 
             <div class="glyph g-ban" aria-hidden="true">
-                <svg viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="8.5"/>
-                    <path d="M6 6l12 12"/>
-                </svg>
+                <span class="pe" data-id="6285138648568437249">🚫</span>
             </div>
 
             <div class="glyph g-warn" aria-hidden="true">
-                <svg viewBox="0 0 24 24">
-                    <path d="M12 4l9 16H3L12 4z"/>
-                    <path d="M12 10v4.5M12 17.6v.01"/>
-                </svg>
+                <span class="pe" data-id="6071194666718469290">⚠️</span>
             </div>
 
             <div class="glyph g-err" aria-hidden="true">
-                <svg viewBox="0 0 24 24">
-                    <path d="M7 7l10 10M17 7L7 17"/>
-                </svg>
+                <span class="pe" data-id="6285138648568437249">❌</span>
             </div>
         </div>
 
@@ -366,6 +587,19 @@ h1 {
         <p class="msg" id="message" aria-live="polite">
             Please wait while we securely check your account.
         </p>
+
+        <p class="chip" id="joke"></p>
+
+        <div class="ask" id="ask" hidden>
+            <p class="ask-q" id="askQ">Want to be unbanned?</p>
+
+            <div class="arena" id="arena">
+                <button class="choice yes" id="yesBtn" type="button">Yes</button>
+                <button class="choice no" id="noBtn" type="button">No</button>
+            </div>
+
+            <p class="taunt" id="taunt" aria-live="polite"></p>
+        </div>
 
         <button class="btn ok" id="doneBtn" type="button">
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -387,11 +621,14 @@ h1 {
     <div class="tear"></div>
 
     <footer class="pass-foot">
+        <span class="pe" data-id="6071194666718469290">ℹ️</span>
         Secure account verification. If you believe a ban is a mistake,
         contact the administrator.
     </footer>
 
 </main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
 
 <script>
 "use strict";
@@ -409,6 +646,18 @@ if (tg) {
     } catch (error) {
         console.warn("Telegram WebApp initialization failed.");
     }
+}
+
+function haptic(type) {
+    try {
+        if (!tg || !tg.HapticFeedback) return;
+
+        if (type === "success" || type === "error") {
+            tg.HapticFeedback.notificationOccurred(type);
+        } else {
+            tg.HapticFeedback.impactOccurred("light");
+        }
+    } catch (error) {}
 }
 
 // ==========================================
@@ -438,11 +687,201 @@ if (tg && typeof tg.onEvent === "function") {
 // Must match your deployed backend.
 const API_BASE = "https://mrabdubot.vercel.app";
 
+const $ = id => document.getElementById(id);
+
+const reduceMotion =
+    window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
 // ==========================================
-// ELEMENTS
+// PREMIUM EMOJIS
+// The emoji files come from the backend
+// (/api/emoji/:id). If loading fails, the normal
+// emoji written inside the element stays visible.
 // ==========================================
 
-const $ = id => document.getElementById(id);
+const EMOJI_CACHE = new Map();
+
+function fetchEmoji(id) {
+    if (EMOJI_CACHE.has(id)) {
+        return EMOJI_CACHE.get(id);
+    }
+
+    const promise = (async () => {
+        const response = await fetch(`${API_BASE}/api/emoji/${id}`);
+
+        if (!response.ok) {
+            throw new Error("Emoji not available.");
+        }
+
+        const type = (
+            response.headers.get("content-type") || ""
+        ).toLowerCase();
+
+        if (type.includes("json")) {
+            return { kind: "lottie", text: await response.text() };
+        }
+
+        const blob = await response.blob();
+
+        return {
+            kind: type.includes("video") ? "video" : "image",
+            url: URL.createObjectURL(blob)
+        };
+    })();
+
+    EMOJI_CACHE.set(id, promise);
+
+    promise.catch(() => EMOJI_CACHE.delete(id));
+
+    return promise;
+}
+
+async function mountPremium(el) {
+    const id = el.dataset.id;
+
+    if (!id || el.dataset.mounted) return;
+
+    el.dataset.mounted = "1";
+
+    try {
+        const asset = await fetchEmoji(id);
+        const holder = document.createElement("span");
+
+        holder.className = "pe-media";
+
+        if (asset.kind === "lottie") {
+            if (!window.lottie) throw new Error("Lottie missing.");
+
+            el._anim = window.lottie.loadAnimation({
+                container: holder,
+                renderer: "svg",
+                loop: true,
+                autoplay: true,
+                animationData: JSON.parse(asset.text)
+            });
+
+        } else if (asset.kind === "video") {
+            const video = document.createElement("video");
+
+            video.src = asset.url;
+            video.muted = true;
+            video.loop = true;
+            video.autoplay = true;
+            video.playsInline = true;
+            video.setAttribute("playsinline", "");
+
+            // If the device cannot play it, keep the normal emoji.
+            video.addEventListener("error", () => {
+                holder.remove();
+                el.textContent = el.dataset.fallback || "";
+            });
+
+            el._video = video;
+            holder.appendChild(video);
+
+        } else {
+            const image = document.createElement("img");
+
+            image.src = asset.url;
+            image.alt = "";
+            holder.appendChild(image);
+        }
+
+        el.dataset.fallback = el.textContent;
+        el.textContent = "";
+        el.appendChild(holder);
+
+        syncAnimations();
+
+    } catch (error) {
+        // Keep the normal emoji.
+    }
+}
+
+// Only visible emojis animate (saves battery).
+function syncAnimations() {
+    document.querySelectorAll(".pe").forEach(el => {
+        const visible = el.offsetParent !== null;
+
+        if (el._anim) {
+            if (visible) el._anim.play();
+            else el._anim.pause();
+        }
+
+        if (el._video) {
+            if (visible) el._video.play().catch(() => {});
+            else el._video.pause();
+        }
+    });
+}
+
+document.querySelectorAll(".pe").forEach(mountPremium);
+
+// ==========================================
+// FUNNY TEXTS
+// ==========================================
+
+const LOADING_LINES = [
+    "Asking Telegram if you are a real human 🤔",
+    "Counting the hamsters that power our server 🐹",
+    "Looking for sneaky second accounts 🕵️",
+    "Polishing your verification badge ✨",
+    "Almost there... probably 😅"
+];
+
+const SUCCESS_LINES = [
+    "Certified human. Beep boop... wait, no beep 🤖",
+    "Your account is now shinier than a new coin 🪙",
+    "Plot twist: that was easy 😎"
+];
+
+const ERROR_LINES = [
+    "The hamsters tripped over a cable 🐹",
+    "Our server went to get coffee ☕",
+    "Even robots have bad days 🤖"
+];
+
+const WARNING_LINES = [
+    "Wrong door, friend 🚪",
+    "This page is shy outside Telegram 🙈"
+];
+
+const BANNED_LINES = [
+    "Plot twist nobody wanted 🎬",
+    "The ban hammer has spoken 🔨",
+    "Oof. That one hurts 😬"
+];
+
+function pick(list) {
+    return list[Math.floor(Math.random() * list.length)];
+}
+
+let loadingTimer = null;
+let loadingIndex = 0;
+
+function startLoadingLines() {
+    stopLoadingLines();
+
+    loadingIndex = 0;
+    $("joke").textContent = LOADING_LINES[0];
+
+    loadingTimer = setInterval(() => {
+        loadingIndex = (loadingIndex + 1) % LOADING_LINES.length;
+        $("joke").textContent = LOADING_LINES[loadingIndex];
+    }, 2200);
+}
+
+function stopLoadingLines() {
+    if (loadingTimer) {
+        clearInterval(loadingTimer);
+        loadingTimer = null;
+    }
+}
+
+// ==========================================
+// STATE
+// ==========================================
 
 const DOT_COLORS = {
     loading: "var(--accent)",
@@ -453,7 +892,14 @@ const DOT_COLORS = {
 };
 
 function setState(state, title, message) {
-    $("stamp").dataset.state = state;
+    const stamp = $("stamp");
+
+    stamp.dataset.state = state;
+
+    stamp.classList.remove("pop");
+    void stamp.offsetWidth;
+    stamp.classList.add("pop");
+
     $("dot").style.background =
         DOT_COLORS[state] || DOT_COLORS.loading;
 
@@ -467,6 +913,270 @@ function setState(state, title, message) {
         state === "error" || state === "warning"
             ? "flex"
             : "none";
+
+    if (state === "loading") {
+        startLoadingLines();
+    } else {
+        stopLoadingLines();
+
+        const pool = {
+            success: SUCCESS_LINES,
+            error: ERROR_LINES,
+            warning: WARNING_LINES,
+            banned: BANNED_LINES
+        }[state];
+
+        $("joke").textContent = pool ? pick(pool) : "";
+    }
+
+    if (state === "banned") {
+        resetAsk();
+        $("ask").hidden = false;
+    } else {
+        $("ask").hidden = true;
+    }
+
+    syncAnimations();
+}
+
+// ==========================================
+// BAN QUESTION: THE RUNAWAY "YES" BUTTON
+// ==========================================
+
+const arena = $("arena");
+const yesBtn = $("yesBtn");
+const noBtn = $("noBtn");
+
+const TAUNTS = [
+    "Nice try 😏",
+    "Too slow! 🐢",
+    "Catch me if you can 🏃",
+    "Skill issue 😎",
+    "It is faster than your Wi-Fi 📶",
+    "The button has trust issues 😂",
+    "Almost... not really 🤏",
+    "Is that all you got? 💪",
+    "Boing! 🦘",
+    "You blinked. I moved 👀"
+];
+
+let dodges = 0;
+let lastDodge = 0;
+let lastTaunt = -1;
+
+function resetAsk() {
+    dodges = 0;
+    lastTaunt = -1;
+
+    $("askQ").textContent = "Want to be unbanned?";
+    $("taunt").textContent = "Go on, press Yes. We dare you 😏";
+
+    arena.style.display = "";
+
+    yesBtn.style.left = "";
+    yesBtn.style.top = "";
+}
+
+function placeYes(pointerX, pointerY) {
+    const box = arena.getBoundingClientRect();
+
+    const width = yesBtn.offsetWidth;
+    const height = yesBtn.offsetHeight;
+
+    const maxX = Math.max(0, box.width - width);
+    const maxY = Math.max(0, box.height - height);
+
+    const no = noBtn.getBoundingClientRect();
+
+    const noX = no.left - box.left;
+    const noY = no.top - box.top;
+
+    let best = { x: 0, y: 0 };
+    let bestScore = -Infinity;
+
+    for (let i = 0; i < 16; i++) {
+        const x = Math.random() * maxX;
+        const y = Math.random() * maxY;
+
+        const centerX = x + width / 2;
+        const centerY = y + height / 2;
+
+        const distance = pointerX === null
+            ? 200
+            : Math.hypot(centerX - pointerX, centerY - pointerY);
+
+        const overlap =
+            x < noX + no.width + 8 &&
+            x + width + 8 > noX &&
+            y < noY + no.height + 8 &&
+            y + height + 8 > noY;
+
+        const score = distance - (overlap ? 1000 : 0);
+
+        if (score > bestScore) {
+            bestScore = score;
+            best = { x, y };
+        }
+    }
+
+    yesBtn.style.left = best.x + "px";
+    yesBtn.style.top = best.y + "px";
+}
+
+function showTaunt() {
+    let text;
+
+    if (dodges === 1) {
+        text = "Whoa! The button moved 😳";
+    } else if (dodges === 10) {
+        text = "The Yes button is on strike ✊😂";
+    } else if (dodges === 20) {
+        text = "You are persistent! The real answer: ask the administrator 🙂";
+    } else {
+        let index;
+
+        do {
+            index = Math.floor(Math.random() * TAUNTS.length);
+        } while (index === lastTaunt);
+
+        lastTaunt = index;
+        text = TAUNTS[index];
+    }
+
+    $("taunt").textContent = `${text}  (escaped ${dodges}×)`;
+}
+
+function dodge(event) {
+    const now = Date.now();
+
+    if (now - lastDodge < 180) return;
+
+    lastDodge = now;
+    dodges++;
+
+    const box = arena.getBoundingClientRect();
+
+    let pointerX = null;
+    let pointerY = null;
+
+    if (event && typeof event.clientX === "number") {
+        pointerX = event.clientX - box.left;
+        pointerY = event.clientY - box.top;
+    }
+
+    placeYes(pointerX, pointerY);
+
+    yesBtn.classList.remove("hop");
+    void yesBtn.offsetWidth;
+    yesBtn.classList.add("hop");
+
+    showTaunt();
+    haptic("light");
+}
+
+["pointerenter", "pointerdown"].forEach(name => {
+    yesBtn.addEventListener(name, dodge);
+});
+
+yesBtn.addEventListener("touchstart", event => {
+    event.preventDefault();
+    dodge(event.touches && event.touches[0]);
+}, { passive: false });
+
+yesBtn.addEventListener("focus", () => dodge());
+
+// Even a perfect click (keyboard etc.) never works.
+yesBtn.addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    dodge(event);
+});
+
+noBtn.addEventListener("click", () => {
+    $("askQ").textContent = "Respect. 🫡";
+    $("taunt").textContent =
+        "You stay banned. If it is a mistake, contact the administrator.";
+
+    arena.style.display = "none";
+    haptic("light");
+});
+
+window.addEventListener("resize", () => {
+    yesBtn.style.left = "";
+    yesBtn.style.top = "";
+});
+
+// ==========================================
+// CONFETTI
+// ==========================================
+
+function confetti() {
+    if (reduceMotion) return;
+
+    const canvas = $("confetti");
+    const ctx = canvas.getContext("2d");
+
+    if (!ctx) return;
+
+    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+
+    const width = canvas.width = window.innerWidth * ratio;
+    const height = canvas.height = window.innerHeight * ratio;
+
+    canvas.style.display = "block";
+
+    const colors = [
+        "#4fd08f",
+        "#4cb8d9",
+        "#f0b440",
+        "#ff7a73",
+        "#b58cff"
+    ];
+
+    const pieces = Array.from({ length: 90 }, () => ({
+        x: Math.random() * width,
+        y: -Math.random() * height * 0.4,
+        size: (5 + Math.random() * 6) * ratio,
+        vx: (Math.random() - 0.5) * 3 * ratio,
+        vy: (2 + Math.random() * 4) * ratio,
+        rotation: Math.random() * 6,
+        spin: (Math.random() - 0.5) * 0.3,
+        color: colors[Math.floor(Math.random() * colors.length)]
+    }));
+
+    const start = performance.now();
+
+    function frame(time) {
+        ctx.clearRect(0, 0, width, height);
+
+        pieces.forEach(piece => {
+            piece.x += piece.vx;
+            piece.y += piece.vy;
+            piece.vy += 0.05 * ratio;
+            piece.rotation += piece.spin;
+
+            ctx.save();
+            ctx.translate(piece.x, piece.y);
+            ctx.rotate(piece.rotation);
+            ctx.fillStyle = piece.color;
+            ctx.fillRect(
+                -piece.size / 2,
+                -piece.size / 4,
+                piece.size,
+                piece.size / 2
+            );
+            ctx.restore();
+        });
+
+        if (time - start < 2600) {
+            requestAnimationFrame(frame);
+        } else {
+            ctx.clearRect(0, 0, width, height);
+            canvas.style.display = "none";
+        }
+    }
+
+    requestAnimationFrame(frame);
 }
 
 // ==========================================
@@ -584,12 +1294,15 @@ async function verify() {
 
             setState(
                 "success",
-                "Verification finished!",
+                "You are verified!",
                 "Your account has been verified. Check the bot chat to continue."
             );
 
+            confetti();
+            haptic("success");
+
             // Close automatically; the bot already sent the message.
-            setTimeout(closeApp, 1500);
+            setTimeout(closeApp, 2200);
             return;
         }
 
@@ -600,11 +1313,12 @@ async function verify() {
         if (data.status === "banned") {
             setState(
                 "banned",
-                "Access blocked",
+                "You are banned",
                 data.message ||
                 "Your account is permanently banned. Contact the administrator if you believe this is a mistake."
             );
 
+            haptic("error");
             return;
         }
 
