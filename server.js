@@ -6,7 +6,7 @@ const { Pool } = require("pg");
 const app = express();
 app.use(express.json({ limit: "1mb" }));
 
-const VERSION = "emoji-v1";
+const VERSION = "emoji-v2";
 
 // ==========================================
 // CORS
@@ -62,6 +62,21 @@ const pool = DATABASE_URL
     : null;
 
 let dbReady = null;
+
+// ==========================================
+// AUTOMATIC BAN REASONS
+// Only these bans can be removed by the user
+// with the "Yes" button in the Mini App.
+// Bans set by an admin (/ban) are never in
+// this list, so users cannot remove them.
+// ==========================================
+
+const AUTO_BAN_REASONS = [
+    "Multiple accounts detected.",
+    "VPN/Tor usage detected.",
+    "Proxy/hosting connection detected.",
+    "Security violation detected."
+];
 
 // ==========================================
 // PREMIUM EMOJIS
@@ -1007,6 +1022,107 @@ app.post("/api/auth", async (req, res) => {
 });
 
 // ==========================================
+// SELF UNBAN (the "Yes" button in the Mini App)
+// POST /api/unban-self
+// Headers: x-init-data
+// Only AUTOMATIC bans (VPN, proxy, multiple
+// accounts) can be removed here. Admin bans
+// cannot. Verification runs again afterwards,
+// so cheaters are banned again right away.
+// ==========================================
+
+app.post("/api/unban-self", async (req, res) => {
+    try {
+        if (!pool) {
+            return res.status(500).json({
+                ok: false,
+                status: "error",
+                message: "Database is not configured."
+            });
+        }
+
+        await initDatabase();
+
+        const initData = req.headers["x-init-data"];
+
+        if (!initData) {
+            return res.status(400).json({
+                ok: false,
+                status: "error",
+                message: "Missing Telegram data."
+            });
+        }
+
+        const telegramUser = verifyTelegramInitData(initData);
+        const telegramId = String(telegramUser.id);
+
+        const existing = await pool.query(
+            `
+            SELECT status, ban_reason
+            FROM fraud_users
+            WHERE telegram_id = $1
+            `,
+            [telegramId]
+        );
+
+        if (
+            existing.rows.length === 0 ||
+            existing.rows[0].status !== "banned"
+        ) {
+            return res.json({
+                ok: true,
+                status: "not_banned",
+                message: "Your account is not banned."
+            });
+        }
+
+        const reason = existing.rows[0].ban_reason || "";
+
+        if (!AUTO_BAN_REASONS.includes(reason)) {
+            return res.status(403).json({
+                ok: false,
+                status: "admin_ban",
+                message:
+                    "This ban was set by an administrator. Please contact the administrator."
+            });
+        }
+
+        // whitelisted = false, so the security checks
+        // (VPN, proxy, multiple accounts) run again.
+        await pool.query(
+            `
+            UPDATE fraud_users
+            SET status = 'verified',
+                ban_reason = NULL,
+                vpn_detected = false,
+                proxy_detected = false,
+                risk_score = 0,
+                ban_message_sent = false,
+                whitelisted = false,
+                last_seen = NOW()
+            WHERE telegram_id = $1
+            `,
+            [telegramId]
+        );
+
+        return res.json({
+            ok: true,
+            status: "unbanned",
+            message: "You have been unbanned."
+        });
+
+    } catch (error) {
+        console.error("UNBAN SELF ERROR:", error.message);
+
+        return res.status(500).json({
+            ok: false,
+            status: "error",
+            message: "Could not unban you. Please try again."
+        });
+    }
+});
+
+// ==========================================
 // STATUS API FOR TELEBOT CREATOR
 // GET /api/status?id=USER_ID
 // Header: x-status-key
@@ -1203,4 +1319,4 @@ if (require.main === module) {
     app.listen(port, () => {
         console.log(`Backend running on port ${port}`);
     });
-        }
+            }
