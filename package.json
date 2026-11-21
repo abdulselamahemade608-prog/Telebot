@@ -1,12 +1,12 @@
 {
-  "name": "adewa-mini-app",
+  "name": "telegram-mini-app",
   "version": "1.0.0",
-  "description": "Adewa Telegram Mini App Backend",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
+    "cors": "^2.8.5",
     "express": "^5.1.0",
     "pg": "^8.16.3"
   }
